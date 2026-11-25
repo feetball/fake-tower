@@ -27,8 +27,26 @@ export interface Conn {
 export interface HubOptions {
   minPlayers?: number;
   rng?: Rng;
-  /** Real-time tick interval; tests may shorten it. Sim always advances 1/TICK_HZ s per tick. */
+  /** Real-time tick interval; tests may shorten it. Sim always advances 1/TICK_HZ s per sub-step. */
   tickMs?: number;
+  /**
+   * Simulation speed multiplier (env FT_TIME_SCALE), for fast end-to-end tests.
+   * Each real tick runs `timeScale` sub-steps of exactly 1/TICK_HZ s, so physics,
+   * ILS capture and outcome detection are identical to real time; only the wall
+   * clock is compressed. Clamped to [1, MAX_TIME_SCALE]; fractional values carry
+   * the remainder to the next tick. Views go out once per real tick, radar once
+   * per RADAR_SWEEP_SEC of simulated time (at most once per real tick).
+   */
+  timeScale?: number;
+}
+
+export const MAX_TIME_SCALE = 20;
+
+/** Sanitise a time-scale setting: non-finite or < 1 means real time; capped at MAX_TIME_SCALE. */
+export function clampTimeScale(v: unknown): number {
+  const n = typeof v === 'string' && v.trim() !== '' ? Number(v) : v;
+  if (typeof n !== 'number' || !Number.isFinite(n) || n < 1) return 1;
+  return Math.min(MAX_TIME_SCALE, n);
 }
 
 interface Player {
@@ -57,16 +75,20 @@ export function assignRoles(ids: readonly PlayerId[], rng: Rng): Roles {
 
 const CODE_LETTERS = 'ABCDEFGHJKLMNPQRSTUVWXYZ'; // no I/O: easy to read out loud
 
-class Game {
+export class Game {
   readonly round: Round;
   private timer: ReturnType<typeof setInterval> | null = null;
-  private ticks = 0;
+  /** Simulation sub-steps run so far. */
+  private simTicks = 0;
+  /** Fractional sub-steps owed by a non-integer time scale. */
+  private carry = 0;
   private readonly sweepTicks = Math.round(RADAR_SWEEP_SEC * TICK_HZ);
 
   constructor(
     readonly room: Room,
     readonly roles: Roles,
     rng: Rng,
+    readonly timeScale = 1,
   ) {
     this.round = new Round(roles.pilots, { rng, world: WORLD });
   }
@@ -77,7 +99,7 @@ class Game {
   }
 
   start(tickMs: number): void {
-    this.broadcastViews();
+    this.broadcastViews(true);
     this.timer = setInterval(() => this.tick(), tickMs);
   }
 
@@ -86,9 +108,21 @@ class Game {
     this.timer = null;
   }
 
-  private tick(): void {
+  /** One real-time tick: timeScale fixed sub-steps of 1/TICK_HZ, then the views. Public for tests. */
+  tick(): void {
+    this.carry += this.timeScale;
+    const sweepBefore = Math.floor(this.simTicks / this.sweepTicks);
+    while (this.carry >= 1 - 1e-9 && !this.round.finished) {
+      this.carry -= 1;
+      this.subStep();
+    }
+    this.broadcastViews(Math.floor(this.simTicks / this.sweepTicks) !== sweepBefore);
+    if (this.round.finished) this.room.endRound();
+  }
+
+  private subStep(): void {
     const events = this.round.step(1 / TICK_HZ);
-    this.ticks++;
+    this.simTicks++;
     for (const event of events) {
       this.room.broadcast({ t: 'event', event });
       // Crashed pilots lose their transmitter.
@@ -98,18 +132,16 @@ class Game {
           if (ac) this.room.setPtt(ac.playerId, false);
         }
     }
-    this.broadcastViews();
-    if (this.round.finished) this.room.endRound();
   }
 
   /** 'own' to each pilot every tick; 'radar' to the controllers once per sweep. */
-  private broadcastViews(): void {
+  private broadcastViews(sweep: boolean): void {
     const time = Math.round(this.round.time * 10) / 10;
     for (const id of this.roles.pilots) {
       const ac = this.round.ownView(id);
       if (ac) this.room.sendTo(id, { t: 'own', time, ac });
     }
-    if (this.ticks % this.sweepTicks === 0) {
+    if (sweep) {
       const msg: ServerMsg = { t: 'radar', time, targets: this.round.radar() };
       for (const id of [this.roles.realControllerId, this.roles.impostorId]) if (id) this.room.sendTo(id, msg);
     }
@@ -188,7 +220,7 @@ export class Room {
     if (n > MAX_PLAYERS) return `At most ${MAX_PLAYERS} players`;
 
     const roles = assignRoles(this.connected.map((p) => p.id), this.hub.rng);
-    const game = new Game(this, roles, this.hub.rng);
+    const game = new Game(this, roles, this.hub.rng, this.hub.timeScale);
     this.game = game;
     this.phase = 'playing';
     this.clearPtt();
@@ -275,12 +307,14 @@ export class Hub {
   readonly minPlayers: number;
   readonly rng: Rng;
   readonly tickMs: number;
+  readonly timeScale: number;
   private nextId = 1;
 
   constructor(opts: HubOptions = {}) {
     this.minPlayers = Math.max(1, Math.min(MAX_PLAYERS, Math.floor(opts.minPlayers ?? MIN_PLAYERS)));
     this.rng = opts.rng ?? Math.random;
     this.tickMs = opts.tickMs ?? 1000 / TICK_HZ;
+    this.timeScale = clampTimeScale(opts.timeScale ?? 1);
   }
 
   connect(conn: Conn): PlayerId {

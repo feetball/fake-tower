@@ -1,6 +1,9 @@
 // Entry point: HTTP (static client from dist/client) + WebSocket game server.
 //   PORT            listen port (default SERVER_PORT)
 //   FT_MIN_PLAYERS  minimum players to start, for local testing (default MIN_PLAYERS)
+//   FT_TIME_SCALE   simulation speed multiplier for tests, 1-20 (default 1 = real time).
+//                   Each 100 ms tick runs that many fixed 0.1 s sim sub-steps, so the
+//                   physics are identical to real time, just compressed (see HubOptions).
 
 import { createReadStream, existsSync, statSync } from 'node:fs';
 import { type IncomingMessage, type ServerResponse, createServer } from 'node:http';
@@ -9,7 +12,7 @@ import { extname, join, normalize, resolve, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { WebSocketServer, type WebSocket } from 'ws';
 import { MIN_PLAYERS, SERVER_PORT, type ServerMsg, WS_PATH } from '../shared/protocol';
-import { type Conn, Hub, type HubOptions } from './rooms';
+import { type Conn, Hub, type HubOptions, clampTimeScale } from './rooms';
 
 const MAX_MESSAGE_BYTES = 64 * 1024; // SDP offers with candidates fit comfortably
 
@@ -178,8 +181,12 @@ if (isMain) {
   const envMin = Number(process.env.FT_MIN_PLAYERS);
   const minPlayers = Number.isInteger(envMin) && envMin >= 1 ? envMin : MIN_PLAYERS;
   const port = Number(process.env.PORT ?? SERVER_PORT);
-  startServer({ port, minPlayers }).then(
-    (s) => console.log(`Fake Tower server on http://localhost:${s.port} (ws ${WS_PATH}, min players ${minPlayers})`),
+  const timeScale = clampTimeScale(process.env.FT_TIME_SCALE);
+  startServer({ port, minPlayers, timeScale }).then(
+    (s) =>
+      console.log(
+        `Fake Tower server on http://localhost:${s.port} (ws ${WS_PATH}, min players ${minPlayers}${timeScale !== 1 ? `, time scale x${timeScale}` : ''})`,
+      ),
     (e: unknown) => {
       console.error('Failed to start:', e);
       process.exit(1);
