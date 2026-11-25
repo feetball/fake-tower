@@ -91,7 +91,11 @@ export function ilsDeviation(world: WorldDef, x: number, y: number, alt: number)
   // feet of lateral error is a large angle) only "behind the threshold" (> 90° off
   // the back course) loses the signal. Without this, an aircraft established a few
   // dozen feet off the centreline lost LOC in the last step and went missed.
-  if (d > world.ils.rangeNm || d < 1e-6 || Math.abs(off) > 90) return { loc: null, gs: null };
+  if (d > world.ils.rangeNm || Math.abs(off) > 90) return { loc: null, gs: null };
+  // Exactly over the antenna (an aircraft can end a step a hair short of the
+  // threshold): the angles are undefined, show centred needles rather than "no
+  // signal", which would disconnect the approach one step before touchdown.
+  if (d < 1e-6) return { loc: 0, gs: 0 };
   if (Math.abs(off) > 35 && d > ILS_NEAR_NM) return { loc: null, gs: null };
   // Course 270, aircraft south of the centreline (bearing > 090): centreline is to the right.
   const loc = clamp(off / LOC_DEG_PER_DOT, -FULL_SCALE, FULL_SCALE);
