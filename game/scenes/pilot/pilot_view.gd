@@ -102,6 +102,7 @@ func _on_touchdown(sink_fpm: float) -> void:
 
 func _on_crashed(outcome: String) -> void:
 	audio.crash(outcome)
+	hint.visible = false
 	var cs := String(flight.own.get("callsign", Session.my_callsign))
 	if outcome == "fuel":
 		# Power fails as the engines run down; then the cut.
@@ -210,6 +211,7 @@ func _apply_debug_args() -> void:
 			if oc == "landed":
 				outcome_overlay.show_landed(Session.my_callsign)
 			else:
+				hint.visible = false
 				outcome_overlay.force_crash(oc, Session.my_callsign))
 	var hov := _arg("--pilot-debug-hover=")
 	if hov != "":

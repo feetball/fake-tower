@@ -149,9 +149,9 @@ func _collect_airport_lights() -> void:
 	# Seen from the approach through fog: brighter cores and wider scattering
 	# halos than the menu backdrop's settings.
 	for lp in _airport_lights:
-		lp.intensity_scale = 1.8
-		lp.halo_gain *= 2.2
-		lp.min_halo_angle = 0.04
+		lp.intensity_scale = 1.25
+		lp.halo_gain *= 1.5
+		lp.min_halo_angle = 0.022
 	_last_sigma = -1.0
 
 

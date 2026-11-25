@@ -70,7 +70,8 @@ func _set_light(light: Dictionary, on: bool, flash: bool) -> void:
 	var col: Color = light["col"]
 	mat.emission_energy_multiplier = 2.2 if lit else 0.0
 	mat.albedo_color = col * 0.5 if lit else Color(0.03, 0.025, 0.02)
-	(light["label"] as Label3D).modulate = Color(1.6, 1.5, 1.4) if lit else col * 0.22
+	var lit_text := Color(1.6, 1.5, 1.4) if col.g < 0.3 else Color(0.12, 0.06, 0.0)
+	(light["label"] as Label3D).modulate = lit_text if lit else col * 0.22
 
 
 func _process(delta: float) -> void:

@@ -134,9 +134,9 @@ func _alerts(c: Vector2) -> void:
 		A.text(self, c + Vector2(0.0, -120.0), "MINIMUMS", 34, A.AMBER)
 	if bus.has_warning("PULL UP"):
 		if A.flash(0.7):
-			var r := Rect2(c + Vector2(-125.0, 44.0), Vector2(250.0, 58.0))
+			var r := Rect2(c + Vector2(-125.0, -118.0), Vector2(250.0, 58.0))
 			draw_rect(r, Color(0, 0, 0, 0.7))
 			draw_rect(r, A.RED, false, 4.0)
 			A.text(self, r.get_center(), "PULL UP", 46, A.RED)
 	elif bus.has_warning("TERRAIN"):
-		A.text(self, c + Vector2(0.0, 72.0), "TERRAIN", 40, A.AMBER)
+		A.text(self, c + Vector2(0.0, -90.0), "TERRAIN", 40, A.AMBER)

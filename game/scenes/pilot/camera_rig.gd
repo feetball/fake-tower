@@ -9,7 +9,7 @@ signal view_changed(view_name: String)
 
 ## name -> [head offset (aircraft frame, m), yaw deg, pitch deg, vertical fov deg]
 const VIEWS := {
-	"panel": [Vector3(0.24, -0.1, -0.06), -1.0, -28.0, 40.0],
+	"panel": [Vector3(0.22, -0.1, -0.04), 1.5, -28.5, 45.0],
 	"outside": [Vector3(0.0, 0.03, 0.0), 0.0, -9.0, 58.0],
 	"pedestal": [Vector3(0.3, -0.08, 0.02), -30.0, -52.0, 56.0],
 }

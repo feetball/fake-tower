@@ -123,7 +123,7 @@ func _plan(d: Dictionary, r: Rect2) -> void:
 		draw_arc(c, rr, 0, TAU, 48, TERR_INK, 1.2, true)
 		draw_colored_polygon(PackedVector2Array([c + Vector2(0, -5), c + Vector2(4.5, 3), c + Vector2(-4.5, 3)]), TERR_INK)
 		_t(c + Vector2(0, 16), "%d'" % int(t["elev_ft"]), 16, TERR_INK, 0, true)
-		_t(c + Vector2(0, -16), String(t["name"]), 12, TERR_INK, 0)
+		_t(c + Vector2(0, -rr * 1.35 - 10.0), String(t["name"]), 12, TERR_INK, 0)
 	# DME rings from FTW.
 	for ring: float in [10.0, 25.0]:
 		_dashed_circle(to_px.call(0.0, 0.0), ring * k, GREY)
@@ -135,7 +135,7 @@ func _plan(d: Dictionary, r: Rect2) -> void:
 	var faf: Dictionary = ils["faf"]
 	var ridge := _fix(d, "RIDGE")
 	draw_line(to_px.call(0.0, 0.0), to_px.call(float(ridge["x"]) + 2.0, 0.0), INK, 3.0)
-	_t(to_px.call(11.0, 0.0) + Vector2(0, -16), "270°", 16, INK, 0, true)
+	_t(to_px.call(11.0, 0.0) + Vector2(0, 18), "270°", 16, INK, 0, true)
 	_arrow(to_px.call(5.0, 0.0), PI, INK)
 	# Missed approach: straight ahead then right turn towards the hold.
 	var ma0: Vector2 = to_px.call(-1.4, 0.0)
@@ -197,8 +197,8 @@ func _hold(d: Dictionary, to_px: Callable, k: float) -> void:
 		pts.append(start + right * wdt * 0.5 + (right * cos(a) - dir * sin(a)) * wdt * 0.5)
 	draw_polyline(pts, INK, 2.0, true)
 	_arrow(start.lerp(p, 0.55), dir.angle(), INK)
-	_t(p + right * wdt + Vector2(8, 8), "%03d°" % int(h["inbound_course_deg"]), 13, INK, -1, true)
-	_t(p + right * wdt + Vector2(8, 26), "MHA %d" % int(h["min_alt_ft"]), 12, INK)
+	_t(p + Vector2(18, -26), "%03d°" % int(h["inbound_course_deg"]), 13, INK, -1, true)
+	_t(p + Vector2(18, -10), "MHA %d" % int(h["min_alt_ft"]), 12, INK)
 
 
 func _profile(d: Dictionary, r: Rect2) -> void:
@@ -235,8 +235,8 @@ func _profile(d: Dictionary, r: Rect2) -> void:
 	_maltese(pf, 9.0)
 	_t(pf + Vector2(0, -34), "%s" % ils["faf"]["name"], 15, INK, 0, true)
 	_t(pf + Vector2(0, -18), "D%.1f" % faf_x, 12, INK, 0)
-	_t(pf.lerp(th, 0.45) + Vector2(34, -40), "GS %.2f°" % float(ils["glide_deg"]), 15, INK, -1, true)
-	_t(pf.lerp(th, 0.45) + Vector2(34, -22), "TCH %d'" % int(tch), 13, INK, -1)
+	_t(pf.lerp(th, 0.45) + Vector2(-40, 30), "GS %.2f°" % float(ils["glide_deg"]), 15, INK, -1, true)
+	_t(pf.lerp(th, 0.45) + Vector2(-40, 48), "TCH %d'" % int(tch), 13, INK, -1)
 	# Vertical reference lines and distances.
 	for nm: float in [faf_x, ridge_x]:
 		_dashed(Vector2(px_x.call(nm), px_y.call(plat)), Vector2(px_x.call(nm), y_ground), GREY)
