@@ -267,10 +267,13 @@ jobs:
       - run: pip install 'gdtoolkit==4.5.0'
       # Config and rationale: game/gdlintrc. gdformat is not enforced yet (most files are
       # not formatted); this reports the count without failing.
+      # gdlint reads gdlintrc from the working directory, so run inside game/.
       - name: gdlint
-        run: gdlint game
+        working-directory: game
+        run: gdlint .
       - name: gdformat (informational)
-        run: gdformat --check game || true  # prints the files that would change; never fails
+        working-directory: game
+        run: gdformat --check . || true  # prints the files that would change; never fails
 
   game-export:
     name: Game - export (Windows, Linux)
