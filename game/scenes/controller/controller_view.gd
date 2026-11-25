@@ -8,7 +8,8 @@ extends Node3D
 ##
 ## Debug user args (for screenshots): --ctrl-debug-targets, --ctrl-select=<cs>,
 ## --ctrl-framing=room, --ctrl-rbl, --ctrl-phr, --ctrl-scratch=<text>,
-## --ctrl-ca-on, --ctrl-look=<yaw_deg>,<pitch_deg>
+## --ctrl-ca-on, --ctrl-look=<yaw_deg>,<pitch_deg>, --ctrl-view=<x_nm>,<y_nm>,<range_nm>,
+## --ctrl-layers=<key,...> (toggles, e.g. ptl)
 
 const ScopeDisplay := preload("res://scenes/controller/scope/scope_display.gd")
 const SidePanel := preload("res://scenes/controller/panel/side_panel.gd")
@@ -38,11 +39,13 @@ var _panel: SidePanel
 var _args: Dictionary = {}
 var _debug := false
 var _debug_last: Array = []
-var _debug_timer := 0.0
 var _overlay_alpha := 1.0
 var _reserved_top := -1.0
 var _layout_timer := 0.0
 var _side_rect := Rect2()
+## Frames the flight-data SubViewport still has to render after a change (the
+## rebuilt rows settle their layout a frame later).
+var _panel_dirty := 0
 
 
 func _ready() -> void:
@@ -67,10 +70,13 @@ func _ready() -> void:
 		for k in kinds:
 			_tones.alert(k))
 	_scope.ctx.model.changed.connect(_panel.refresh)
+	_scope.ctx.model.changed.connect(_mark_panel_dirty)
 	_scope_screen.gui_input.connect(_on_scope_gui_input)
 	_scope_screen.mouse_exited.connect(func() -> void: _scope.input.mouse_left())
 	Session.radar_swept.connect(_on_radar)
-	Session.round_event.connect(func(_e: Dictionary) -> void: _panel.refresh())
+	Session.round_event.connect(func(_e: Dictionary) -> void:
+		_panel.refresh()
+		_mark_panel_dirty())
 	Session.round_began.connect(_on_round_began)
 	get_viewport().size_changed.connect(_layout)
 
@@ -120,6 +126,15 @@ func _start_debug() -> void:
 		_scope.ctx.rbl_a = Fmt.target_pos(m.targets["SKW412"])
 		_scope.ctx.rbl_b = Fmt.target_pos(m.targets["ASA277"])
 	_scope.ctx.force_flash = _args.has("ctrl-ca-on")
+	if _args.has("ctrl-view"):
+		var v := String(_args["ctrl-view"]).split_floats(",")
+		if v.size() == 3:
+			var xf := _scope.ctx.xform
+			xf.center = Vector2(v[0], v[1])
+			xf.k = minf(xf.plot.size.x, xf.plot.size.y) * 0.5 / maxf(v[2], 1.0)
+			xf.user_moved = true
+	for key in String(_args.get("ctrl-layers", "")).split(",", false):
+		_scope.ctx.model.toggle_layer(key)
 	if _args.has("ctrl-phr"):
 		_panel.set_phraseology_open(true)
 	if String(_args.get("ctrl-framing", "")) == "room":
@@ -183,6 +198,7 @@ func _layout() -> void:
 	_panel_host.size = _side_rect.size
 	_panel_glass.position = _side_rect.position
 	_panel_glass.size = _side_rect.size
+	_panel.set_text_scale(clampf(0.85 / scale, 1.0, 1.3))
 	_panel.position = Vector2.ZERO
 	_panel.size = _side_rect.size
 	_panel_vp.size = Vector2i((_side_rect.size * scale).round())
@@ -208,12 +224,10 @@ func _process(delta: float) -> void:
 		_layout_timer = 0.0
 		if not is_equal_approx(_hud_top(), _reserved_top):
 			_layout()
-	if _debug and not _debug_last.is_empty():
-		_debug_timer += delta
-		if _debug_timer >= DebugTargets.SWEEP_SEC:
-			_debug_timer = 0.0
-			_scope.ingest(_debug_last)
-			print("DBG ingest ", Time.get_ticks_msec())
+	# Wall clock, not delta: frame deltas are clamped when rendering is very slow.
+	if _debug and not _debug_last.is_empty() \
+			and _scope.ctx.model.sweep_age_sec(Time.get_ticks_msec()) >= DebugTargets.SWEEP_SEC:
+		_scope.ingest(_debug_last)
 	_update_presentation(delta)
 
 
@@ -230,10 +244,16 @@ func _update_presentation(delta: float) -> void:
 	var in_overlay := _panel.get_parent() == _panel_host
 	if want and not in_overlay:
 		_move_panel(_panel_host)
-		_panel_vp.render_target_update_mode = SubViewport.UPDATE_DISABLED
 	elif not want and in_overlay and _overlay_alpha <= 0.0:
 		_move_panel(_panel_vp)
-		_panel_vp.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+		_mark_panel_dirty()
+	if _panel_dirty > 0 and _panel.get_parent() == _panel_vp:
+		_panel_dirty -= 1
+		_panel_vp.render_target_update_mode = SubViewport.UPDATE_ONCE
+
+
+func _mark_panel_dirty() -> void:
+	_panel_dirty = 3
 
 
 func _move_panel(to: Node) -> void:

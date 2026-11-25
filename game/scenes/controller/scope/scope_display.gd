@@ -17,11 +17,13 @@ const DEFAULT_RANGE_NM := 37.0
 const FLASH_PERIOD_MS := 800
 const FLASH_ON_MS := 560
 const DECAY_SEC := 1.3
+const DECAY_FRAME_MS := 33 ## persistence fade is redrawn at ~30 Hz
 
 var ctx := Ctx.new()
 var input: ScopeInput
 
 var _bg: ColorRect
+var _plot_clip: Control
 var _map: MapLayer
 var _targets: TargetLayer
 var _chrome: ChromeLayer
@@ -29,6 +31,7 @@ var _dirty := true
 var _last_flash := true
 var _last_tick := -1
 var _decaying := false
+var _last_decay_ms := 0
 
 
 func _ready() -> void:
@@ -41,17 +44,29 @@ func _ready() -> void:
 	_bg.color = Look.BG
 	_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_bg)
+	# Map, targets and the measuring line are clipped to the plot area; the
+	# layers are offset back so they still draw in scope coordinates.
+	_plot_clip = Control.new()
+	_plot_clip.clip_contents = true
+	_plot_clip.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_plot_clip)
 	_map = MapLayer.new()
 	_targets = TargetLayer.new()
 	_chrome = ChromeLayer.new()
 	for layer: Control in [_map, _targets, _chrome]:
 		layer.set("ctx", ctx)
 		layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		add_child(layer)
+		if layer == _chrome:
+			add_child(layer)
+		else:
+			_plot_clip.add_child(layer)
 	input = ScopeInput.new(ctx)
 	input.default_range_nm = DEFAULT_RANGE_NM
 	input.view_changed = redraw_all
-	input.chrome_changed = func() -> void: _redraw(_chrome)
+	# Cursor and measuring-line changes: the RBL is drawn by the target layer.
+	input.chrome_changed = func() -> void:
+		_redraw(_chrome)
+		_redraw(_targets)
 	ctx.model.changed.connect(func() -> void:
 		_redraw(_targets)
 		_redraw(_chrome))
@@ -71,12 +86,14 @@ func resize_to(px: Vector2i, ui_scale: float) -> void:
 	size = px
 	ctx.size = Vector2(px)
 	ctx.ui_scale = ui_scale
-	ctx.dcb_h = round(36.0 * maxf(ui_scale, 0.82))
-	ctx.foot_h = round(26.0 * maxf(ui_scale, 0.82))
-	for c: Control in [_bg, _map, _targets, _chrome]:
-		c.position = Vector2.ZERO
-		c.size = Vector2(px)
+	ctx.dcb_h = round(36.0 * maxf(ui_scale, 0.9))
+	ctx.foot_h = round(26.0 * maxf(ui_scale, 0.9))
 	var plot := Rect2(0, ctx.dcb_h, px.x, px.y - ctx.dcb_h - ctx.foot_h)
+	for c: Control in [_bg, _map, _targets, _chrome]:
+		c.position = -plot.position if c.get_parent() == _plot_clip else Vector2.ZERO
+		c.size = Vector2(px)
+	_plot_clip.position = plot.position
+	_plot_clip.size = plot.size
 	var was := ctx.xform.plot
 	ctx.xform.plot = plot
 	if not ctx.xform.user_moved:
@@ -114,10 +131,10 @@ func _process(_delta: float) -> void:
 		if ctx.model.has_alert():
 			_redraw(_targets)
 			_redraw(_chrome)
-	if _decaying:
-		var age := ctx.model.sweep_age_sec(ctx.now_ms)
+	if _decaying and ctx.now_ms - _last_decay_ms >= DECAY_FRAME_MS:
+		_last_decay_ms = ctx.now_ms
 		_redraw(_targets)
-		if age > DECAY_SEC:
+		if ctx.model.sweep_age_sec(ctx.now_ms) > DECAY_SEC:
 			_decaying = false
 	var tick := ctx.now_ms / 250
 	if tick != _last_tick:

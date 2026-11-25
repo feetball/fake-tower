@@ -11,6 +11,7 @@ const S := preload("res://scenes/controller/panel/fdd_style.gd")
 const Phrases := preload("res://scenes/controller/panel/phraseology.gd")
 
 const LOG_LINES := 7
+const CELL_LABELS := {"ALT": "ALT FT", "GS": "GS KT", "TRK": "TRK", "DME": "DME NM", "MSA": "MSA"}
 
 var model: Model
 var extra_events: Array[Dictionary] = []
@@ -29,16 +30,39 @@ var _traffic: VBoxContainer
 var _log: VBoxContainer
 var _atis_text: Label
 var _approach: VBoxContainer
-var _phr_button: Button
+var _tabs: Dictionary = {} ## tab id -> Button
+var _tab := "atis" ## "atis" | "app" | "phr"
 var _phr_body: VBoxContainer
-var _phr_open := false
 var _shown_cs := ""
+
+
+var _text_scale := 1.0
+var _root: VBoxContainer
 
 
 func _ready() -> void:
 	add_theme_stylebox_override(&"panel", S.box(Look.FDD_BG, Color.TRANSPARENT, 0, 14, 10, 0))
 	mouse_filter = Control.MOUSE_FILTER_STOP
+	_build()
+
+
+## Rebuilds with larger text when the window is small (see FddStyle.text_scale).
+func set_text_scale(f: float) -> void:
+	if is_equal_approx(f, _text_scale):
+		return
+	_text_scale = f
+	if _root != null:
+		_root.free()
+		_cells.clear()
+		_tabs.clear()
+		_shown_cs = ""
+		_build()
+
+
+func _build() -> void:
+	S.text_scale = _text_scale
 	var root := S.vbox(10)
+	_root = root
 	add_child(root)
 	root.add_child(_header())
 	root.add_child(S.heading("Flight strip"))
@@ -49,6 +73,7 @@ func _ready() -> void:
 	root.add_child(S.heading("Events"))
 	_log = S.vbox(2)
 	root.add_child(_log)
+	root.add_child(_tab_row())
 	var scroll := ScrollContainer.new()
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
@@ -57,23 +82,51 @@ func _ready() -> void:
 	var lower := S.vbox(10)
 	lower.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	scroll.add_child(lower)
-	lower.add_child(S.heading("ATIS"))
 	_atis_text = S.label("", 14, Look.FDD_TEXT)
 	_atis_text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_atis_text.custom_minimum_size = Vector2(100, 0)
 	lower.add_child(_atis_text)
-	lower.add_child(S.heading("ILS RWY 27 — approach"))
-	_approach = S.vbox(3)
+	_approach = S.vbox(4)
 	lower.add_child(_approach)
-	_phr_button = S.flat_button("", 13, Look.FDD_HEAD)
-	_phr_button.pressed.connect(func() -> void:
-		_phr_open = not _phr_open
-		_refresh_phraseology())
-	lower.add_child(_phr_button)
 	_phr_body = S.vbox(4)
 	lower.add_child(_phr_body)
 	refresh_static()
 	refresh()
+
+
+## Reference cards below the live data, one at a time so nothing needs
+## scrolling: ATIS, the approach summary, and the (collapsible) phraseology.
+func _tab_row() -> Control:
+	var row := S.hbox(4)
+	for t: Array in [["atis", "ATIS"], ["app", "ILS RWY 27"], ["phr", "PHRASEOLOGY"]]:
+		var id := String(t[0])
+		var b := S.flat_button(String(t[1]), 13, Look.FDD_HEAD)
+		b.alignment = HORIZONTAL_ALIGNMENT_CENTER
+		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		b.pressed.connect(func() -> void:
+			# The phraseology card collapses back to the ATIS when clicked again.
+			_select_tab("atis" if id == "phr" and _tab == "phr" else id))
+		_tabs[id] = b
+		row.add_child(b)
+	return row
+
+
+func _select_tab(id: String) -> void:
+	_tab = id
+	for key: String in _tabs:
+		var b: Button = _tabs[key]
+		var on := key == id
+		var col := Look.FDD_TEXT if on else Look.FDD_FAINT
+		for st: StringName in [&"font_color", &"font_hover_color", &"font_pressed_color"]:
+			b.add_theme_color_override(st, col)
+		var sb := S.box(Color(1, 1, 1, 0.06) if on else Color(0, 0, 0, 0), Color.TRANSPARENT, 0, 6, 4)
+		sb.border_color = Look.FDD_HEAD if on else Look.FDD_LINE
+		sb.border_width_bottom = 2 if on else 1
+		b.add_theme_stylebox_override(&"normal", sb)
+		b.add_theme_stylebox_override(&"hover", sb)
+	_atis_text.visible = id == "atis"
+	_approach.visible = id == "app"
+	_refresh_phraseology()
 
 
 func _header() -> Control:
@@ -127,18 +180,18 @@ func _strip_card() -> Control:
 	for key: String in ["ALT", "GS", "TRK", "DME", "MSA"]:
 		var cell := S.vbox(0)
 		cell.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		cell.add_child(S.label(key, 11, Look.FDD_FAINT, Look.sans(600)))
+		cell.add_child(S.label(String(CELL_LABELS[key]), 11, Look.FDD_FAINT, Look.sans(600)))
 		var val := S.label("—", 17, Look.FDD_TEXT, Look.mono(600))
 		cell.add_child(val)
 		_cells[key] = val
 		grid.add_child(cell)
 	v.add_child(grid)
 	_scratch = LineEdit.new()
-	_scratch.placeholder_text = "Scratchpad (local) — 7 chars show in the tag"
+	_scratch.placeholder_text = "Scratchpad (local) — shown in tag"
 	_scratch.max_length = 32
 	_scratch.context_menu_enabled = false
 	_scratch.add_theme_font_override(&"font", Look.mono(600))
-	_scratch.add_theme_font_size_override(&"font_size", 15)
+	_scratch.add_theme_font_size_override(&"font_size", S.fs(15))
 	_scratch.add_theme_color_override(&"font_color", Look.FDD_AMBER)
 	_scratch.add_theme_color_override(&"font_placeholder_color", Look.FDD_FAINT)
 	_scratch.add_theme_color_override(&"caret_color", Look.FDD_AMBER)
@@ -201,7 +254,7 @@ func refresh_static() -> void:
 		h.add_child(v)
 		_approach.add_child(h)
 	_refresh_controllers()
-	_refresh_phraseology()
+	_select_tab(_tab)
 
 
 func _vis_text(m: int) -> String:
@@ -213,7 +266,8 @@ func _refresh_controllers() -> void:
 	for p: Dictionary in Session.round_players:
 		if String(p.get("role", "")) == "controller":
 			var n := String(p.get("name", "?"))
-			names.append(n + " (you)" if int(p.get("id", 0)) == Session.my_id else n)
+			var me := int(p.get("id", 0)) == Session.my_id
+			names.append(n + " (you)" if me and n.to_lower() != "you" else n)
 	_ctl_label.text = "ON FREQ  119.850   CTL: %s" % ("  ·  ".join(names) if not names.is_empty() else "—")
 
 
@@ -247,9 +301,9 @@ func _refresh_strip() -> void:
 		return
 	var p := Fmt.target_pos(t)
 	(_cells["ALT"] as Label).text = Fmt.strip_alt_text(t)
-	(_cells["GS"] as Label).text = "%d kt" % int(round(float(t["gs"])))
+	(_cells["GS"] as Label).text = str(int(round(float(t["gs"]))))
 	(_cells["TRK"] as Label).text = "%s°" % Fmt.hdg_text(float(t["track"]))
-	(_cells["DME"] as Label).text = "%.1f nm" % p.length()
+	(_cells["DME"] as Label).text = "%.1f" % p.length()
 	var msa := Fmt.msa_at(_world(), p)
 	(_cells["MSA"] as Label).text = str(msa) if msa > 0 and p.length() <= 25.0 else "—"
 	var status := String(t["status"])
@@ -337,18 +391,16 @@ func _refresh_log() -> void:
 
 
 func set_phraseology_open(on: bool) -> void:
-	_phr_open = on
-	_refresh_phraseology()
+	_select_tab("phr" if on else "atis")
 
 
 func _refresh_phraseology() -> void:
-	if _phr_button == null:
+	if _phr_body == null:
 		return
-	_phr_button.text = ("▾ " if _phr_open else "▸ ") + "PHRASEOLOGY"
 	for c in _phr_body.get_children():
 		c.queue_free()
-	_phr_body.visible = _phr_open
-	if not _phr_open:
+	_phr_body.visible = _tab == "phr"
+	if _tab != "phr":
 		return
 	var cs := model.selected if model != null and model.selected != "" else "SKW412"
 	var atis: Dictionary = Session.atis

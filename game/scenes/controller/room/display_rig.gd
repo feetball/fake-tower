@@ -34,21 +34,24 @@ func _ready() -> void:
 	main_light = SpotLight3D.new()
 	main_light.name = "ScopeLight"
 	main_light.light_color = Color(0.55, 0.95, 0.72)
-	main_light.light_energy = 0.55
-	main_light.spot_range = 2.6
-	main_light.spot_angle = 72.0
-	main_light.spot_attenuation = 1.4
-	main_light.light_volumetric_fog_energy = 0.4
-	main_light.light_specular = 0.25
-	main_light.position = Vector3(0.0, 0.0, 0.06)
+	main_light.light_energy = 1.6
+	main_light.spot_range = 3.4
+	main_light.spot_angle = 75.0
+	main_light.spot_attenuation = 1.2
+	# Behind the glass (no shadows, so it shines through): a source right at the
+	# screen would light the volumetric fog into a glowing blob in front of it.
+	main_light.light_volumetric_fog_energy = 0.25
+	main_light.light_specular = 0.0
+	main_light.position = Vector3(0.0, 0.0, -0.35)
 	add_child(main_light)
 	side_light = OmniLight3D.new()
 	side_light.name = "FddLight"
 	side_light.light_color = Color(0.7, 0.8, 0.95)
-	side_light.light_energy = 0.12
-	side_light.omni_range = 1.2
-	side_light.light_specular = 0.1
-	side_light.position = Vector3(side_center_x(), 0.0, 0.12)
+	side_light.light_energy = 0.3
+	side_light.omni_range = 1.3
+	side_light.light_specular = 0.0
+	side_light.light_volumetric_fog_energy = 0.0
+	side_light.position = Vector3(side_center_x(), -0.1, 0.12)
 	add_child(side_light)
 
 
@@ -79,6 +82,7 @@ func _screen_material(sz: Vector2, seed: float) -> ShaderMaterial:
 	m.shader = DISPLAY_SHADER
 	m.set_shader_parameter("aspect", Vector2(sz.x / sz.y, 1.0))
 	m.set_shader_parameter("seed", seed)
+	m.set_shader_parameter("energy", 1.7)
 	return m
 
 

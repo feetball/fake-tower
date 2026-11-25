@@ -13,14 +13,16 @@ func _ready() -> void:
 	var warm := Color(1.0, 0.82, 0.62)
 	# Glareshield flood: two spots under the lip aimed down at the panel.
 	for x: float in [0.05, L.CENTRE_X + 0.5]:
-		_spot(Vector3(x, -0.33, -0.69), Vector3(x, -0.6, -0.8), warm, 0.5 * flood, 1.1, 70.0)
+		_spot(Vector3(x, -0.385, -0.69), Vector3(x, -0.67, -0.8), warm, 1.4 * flood, 1.1, 80.0)
 	# Pedestal flood from the overhead.
-	_spot(Vector3(L.CENTRE_X, 0.32, -0.25), Vector3(L.CENTRE_X, -0.65, -0.3), warm, 0.35 * flood, 1.6, 40.0)
+	_spot(Vector3(L.CENTRE_X, 0.32, -0.25), Vector3(L.CENTRE_X, -0.65, -0.3), warm, 0.9 * flood, 1.6, 50.0)
+	# Glareshield/MCP: a soft light from the overhead onto the panel face.
+	_spot(Vector3(0.3, 0.3, -0.25), Vector3(0.3, -0.3, -0.68), warm, 0.5 * flood, 1.4, 70.0)
 	# Display spill: the screens are the brightest thing in here.
-	_omni(Vector3(0.1, -0.42, -0.6), Color(0.55, 0.7, 1.0), 0.06, 0.7)
-	_omni(Vector3(L.CENTRE_X, -0.42, -0.6), Color(0.6, 0.75, 1.0), 0.04, 0.6)
+	_omni(Vector3(0.1, -0.47, -0.6), Color(0.55, 0.7, 1.0), 0.06, 0.7)
+	_omni(Vector3(L.CENTRE_X, -0.47, -0.6), Color(0.6, 0.75, 1.0), 0.04, 0.6)
 	# Dome: just enough to read shapes overhead and on the walls.
-	_omni(Vector3(L.CENTRE_X, 0.3, 0.1), Color(0.9, 0.85, 0.8), 0.05, 2.5)
+	_omni(Vector3(L.CENTRE_X, 0.3, 0.1), Color(0.9, 0.85, 0.8), 0.12, 2.5)
 
 
 func _spot(at: Vector3, target: Vector3, col: Color, energy: float, rng: float, angle: float) -> void:
@@ -47,4 +49,5 @@ func _omni(at: Vector3, col: Color, energy: float, rng: float) -> void:
 	o.omni_attenuation = 1.5
 	o.light_volumetric_fog_energy = 0.0
 	o.shadow_enabled = false
+	o.light_specular = 0.0
 	add_child(o)

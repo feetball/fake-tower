@@ -79,8 +79,8 @@ func _aircraft_symbol(c: Vector2) -> void:
 	var edge := A.YELLOW
 	for s: float in [-1.0, 1.0]:
 		var w := PackedVector2Array([
-			c + Vector2(s * 150.0, -6.0), c + Vector2(s * 62.0, -6.0), c + Vector2(s * 62.0, 26.0),
-			c + Vector2(s * 50.0, 26.0), c + Vector2(s * 50.0, 6.0), c + Vector2(s * 150.0, 6.0)])
+			c + Vector2(s * 150.0, -6.0), c + Vector2(s * 50.0, -6.0), c + Vector2(s * 50.0, 26.0),
+			c + Vector2(s * 62.0, 26.0), c + Vector2(s * 62.0, 6.0), c + Vector2(s * 150.0, 6.0)])
 		draw_colored_polygon(w, Color.BLACK)
 		A.polyline_closed(self, w, edge, 3.5)
 	var sq := Rect2(c - Vector2(7.0, 7.0), Vector2(14.0, 14.0))

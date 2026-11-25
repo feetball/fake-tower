@@ -33,7 +33,7 @@ func px(v: float) -> float:
 
 ## Font size with a floor so text stays legible when the window is small.
 func fs(v: float) -> int:
-	return int(round(v * maxf(ui_scale, 0.82)))
+	return int(round(v * maxf(ui_scale, 0.9)))
 
 
 func mono(weight: int = 500) -> Font:

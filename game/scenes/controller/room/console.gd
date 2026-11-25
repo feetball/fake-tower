@@ -24,7 +24,7 @@ var _top: Material
 func _ready() -> void:
 	_shell = Kit.pbr("metal_plate_painted", 1.2, Color(0.16, 0.17, 0.19), 1.0)
 	_dark = Kit.mat(Color(0.03, 0.032, 0.036), 0.6, 0.2)
-	_top = Kit.mat(Color(0.07, 0.072, 0.078), 0.42, 0.0)
+	_top = Kit.mat(Color(0.13, 0.135, 0.145), 0.38, 0.0)
 	_desk()
 	_turret()
 	rig = DisplayRig.new()
@@ -137,10 +137,10 @@ func _strip_bay(p: Vector3) -> void:
 	bay.name = "StripBay"
 	bay.position = p
 	add_child(bay)
-	Kit.box(bay, Vector3(0.34, 0.06, 0.34), Vector3(0.0, 0.03, 0.0), _shell, 0.006)
+	Kit.box(bay, Vector3(0.34, 0.05, 0.34), Vector3(0.0, 0.025, 0.0), _shell, 0.006)
 	var rack := Node3D.new()
-	rack.position = Vector3(0.0, 0.075, 0.0)
-	rack.rotation.x = deg_to_rad(-28.0)
+	rack.position = Vector3(0.0, 0.085, 0.0)
+	rack.rotation.x = deg_to_rad(24.0)
 	bay.add_child(rack)
 	Kit.box(rack, Vector3(0.3, 0.012, 0.3), Vector3.ZERO, _dark, 0.004)
 	var paper := Kit.mat(Color(0.78, 0.76, 0.68), 0.92, 0.0)
@@ -158,42 +158,74 @@ func _strip_bay(p: Vector3) -> void:
 		Kit.box(rack, Vector3(0.25, 0.002, 0.027), Vector3(0.006, 0.0125, z), paper, 0.0)
 		var cs := strip_callsigns[i] if i < strip_callsigns.size() else ["N44CT", "FFT61", "EJA12"][i % 3] as String
 		var up := Vector3(-PI * 0.5, 0.0, 0.0)
-		Kit.label(rack, cs, Vector3(-0.085, 0.0137, z - 0.004), 64, ink, 0.00011, font, up)
-		Kit.label(rack, "%s/M  %03d" % [types[i], 180 + i * 10], Vector3(-0.085, 0.0137, z + 0.0075), 48, Color(ink, 0.8),
-			0.00009, font, up)
+		Kit.label(rack, cs, Vector3(-0.08, 0.0137, z - 0.004), 64, ink, 0.00015, font, up)
+		Kit.label(rack, "%s/M  %03d" % [types[i], 180 + i * 10], Vector3(-0.08, 0.0137, z + 0.0078), 48, Color(ink, 0.85),
+			0.00011, font, up)
 		Kit.label(rack, ["040", "030", "ILS", "060", "050", "HOLD", "080"][i] as String, Vector3(0.03, 0.0137, z), 72,
 			Color(0.1, 0.12, 0.35), 0.0001, hand, up)
 		Kit.label(rack, "%02d%02d" % [21 + i / 3, (i * 7 + 12) % 60], Vector3(0.095, 0.0137, z), 52, Color(ink, 0.75),
 			0.0001, font, up)
 
 
+## Clamp-on arm lamp at the back-left corner reaching over the strip bay; its
+## spot light sits in the shade (model space: clamp at origin, head ~0.25 m
+## along -Z, 0.62 m up).
 func _lamp() -> void:
-	var lamp := Kit.model(self, "desk_lamp_arm_01", Vector3(-0.93, DESK_Y, -0.78), 35.0, 1.0)
+	var lamp := Kit.model(self, "desk_lamp_arm_01", Vector3(-0.98, DESK_Y, -0.92), -135.0, 1.0)
+	var head := Vector3(-0.8, DESK_Y + 0.6, -0.74)
 	if lamp != null:
 		lamp.name = "DeskLamp"
+		head = lamp.transform * Vector3(0.0, 0.6, -0.25)
 	lamp_light = SpotLight3D.new()
 	lamp_light.name = "LampLight"
-	lamp_light.light_color = Color(1.0, 0.7, 0.42)
-	lamp_light.light_energy = 2.4
-	lamp_light.light_volumetric_fog_energy = 1.2
-	lamp_light.spot_range = 1.6
-	lamp_light.spot_angle = 30.0
-	lamp_light.spot_angle_attenuation = 1.6
+	lamp_light.light_color = Color(1.0, 0.68, 0.4)
+	lamp_light.light_energy = 6.0
+	lamp_light.light_volumetric_fog_energy = 2.5
+	lamp_light.spot_range = 1.8
+	lamp_light.spot_angle = 34.0
+	lamp_light.spot_angle_attenuation = 2.2
+	lamp_light.spot_attenuation = 0.8
 	lamp_light.shadow_enabled = true
-	lamp_light.shadow_blur = 1.5
-	lamp_light.position = Vector3(-0.66, 1.3, -0.62)
-	lamp_light.rotation = Vector3(deg_to_rad(-80.0), deg_to_rad(10.0), 0.0)
+	lamp_light.shadow_blur = 1.2
+	lamp_light.position = head
 	add_child(lamp_light)
+	lamp_light.look_at(Vector3(-0.62, DESK_Y, -0.52), Vector3.FORWARD)
+	# Warm bulb glow inside the shade.
+	var bulb := MeshInstance3D.new()
+	var sm := SphereMesh.new()
+	sm.radius = 0.018
+	sm.height = 0.036
+	bulb.mesh = sm
+	bulb.material_override = Kit.mat(Color(1.0, 0.8, 0.6), 0.5, 0.0, Color(1.0, 0.72, 0.45), 6.0)
+	bulb.position = head + Vector3(0.0, 0.01, 0.0)
+	add_child(bulb)
 
 
 func _props() -> void:
 	_headset(Vector3(0.58, DESK_Y, -0.36))
 	_mug(Vector3(0.66, DESK_Y, -0.66))
-	Kit.model(self, "plastic_thermos", Vector3(0.85, DESK_Y, -0.82), -20.0, 1.0)
-	var cb := Kit.model(self, "clipboard", Vector3(-0.42, DESK_Y + 0.002, -0.34), 0.0, 1.0)
-	if cb != null:
-		cb.rotation = Vector3(-PI * 0.5, deg_to_rad(12.0), 0.0)
+	Kit.model(self, "plastic_thermos", Vector3(0.93, DESK_Y, -0.86), -20.0, 0.85)
+	_clipboard(Vector3(-0.47, DESK_Y + 0.003, -0.36), 14.0)
 	_vccs(Vector3(0.84, DESK_Y, -0.44))
+
+
+## Clipboard with the position log sheet.
+func _clipboard(p: Vector3, rot_deg: float) -> void:
+	var board := Node3D.new()
+	board.name = "Clipboard"
+	board.position = p
+	board.rotation.y = deg_to_rad(rot_deg)
+	add_child(board)
+	Kit.model(board, "clipboard", Vector3.ZERO)
+	var paper := Kit.mat(Color(0.8, 0.79, 0.74), 0.9)
+	Kit.box(board, Vector3(0.205, 0.0012, 0.27), Vector3(0.0, 0.0045, 0.02), paper, 0.0)
+	var ink := Color(0.1, 0.11, 0.2)
+	var up := Vector3(-PI * 0.5, 0.0, 0.0)
+	Kit.label(board, "POSITION LOG  APP-1", Vector3(0.0, 0.0053, -0.085), 64, ink, 0.00016, Look.sans(700), up)
+	var lines := ["2110  ON  RWY 27 ILS", "2112  ATIS INFO REC", "2131  WX: FG OVC002", "2140  RELIEF BRIEF"]
+	for i in lines.size():
+		Kit.label(board, lines[i], Vector3(0.0, 0.0053, -0.05 + i * 0.022), 48, Color(ink, 0.8), 0.00016,
+			Look.mono(500), up)
 
 
 func _headset(p: Vector3) -> void:
@@ -202,19 +234,39 @@ func _headset(p: Vector3) -> void:
 	hs.position = p
 	hs.rotation.y = deg_to_rad(-25.0)
 	add_child(hs)
-	var band := Kit.mat(Color(0.04, 0.04, 0.045), 0.45, 0.3)
-	var pad := Kit.pbr("leather_seat_02", 0.2, Color(0.08, 0.08, 0.085), 1.0)
-	# Headband lying flat: an arc of short segments.
-	var r := 0.085
-	for i in 11:
-		var a := lerpf(-PI * 0.5, PI * 0.5, i / 10.0)
-		var seg := Kit.box(hs, Vector3(0.026, 0.008, 0.022), Vector3(sin(a) * r, 0.006, -cos(a) * r), band, 0.003)
-		seg.rotation.y = -a
+	var band := Kit.mat(Color(0.05, 0.05, 0.055), 0.35, 0.6)
+	var pad := Kit.pbr("leather_seat_02", 0.15, Color(0.09, 0.09, 0.095), 1.0)
+	# Headband lying on its side: a smooth arc of thin segments.
+	var r := 0.082
+	var n := 24
+	for i in n:
+		var a0 := lerpf(-PI * 0.5, PI * 0.5, float(i) / n)
+		var a1 := lerpf(-PI * 0.5, PI * 0.5, float(i + 1) / n)
+		var mid := (a0 + a1) * 0.5
+		var seg := Kit.box(hs, Vector3(r * (a1 - a0) * 1.08, 0.006, 0.012),
+			Vector3(sin(mid) * r, 0.006, -cos(mid) * r), band, 0.002)
+		seg.rotation.y = -mid
+	# Ear cups: shell plus a leather cushion ring, lying flat.
 	for sx: float in [-1.0, 1.0]:
-		Kit.cylinder(hs, 0.036, 0.038, 0.026, Vector3(sx * (r + 0.004), 0.019, 0.006), pad, Vector3.ZERO, 20)
-	var boom := Kit.cylinder(hs, 0.0025, 0.0025, 0.12, Vector3(r + 0.03, 0.03, 0.05), band, Vector3(PI * 0.5, 0.6, 0.0), 8)
+		var c := Vector3(sx * (r + 0.006), 0.0, 0.004)
+		Kit.cylinder(hs, 0.031, 0.033, 0.018, c + Vector3(0.0, 0.009, 0.0), band, Vector3.ZERO, 28)
+		var ring := MeshInstance3D.new()
+		var tm := TorusMesh.new()
+		tm.inner_radius = 0.016
+		tm.outer_radius = 0.033
+		tm.rings = 24
+		tm.ring_segments = 10
+		ring.mesh = tm
+		ring.material_override = pad
+		ring.position = c + Vector3(0.0, 0.022, 0.0)
+		ring.scale = Vector3(1.0, 0.55, 1.0)
+		hs.add_child(ring)
+	var boom := Kit.cylinder(hs, 0.0022, 0.0022, 0.13, Vector3(r + 0.045, 0.012, 0.06), band,
+		Vector3(PI * 0.5, 0.0, -0.5), 8)
 	boom.name = "Boom"
-	Kit.cylinder(hs, 0.003, 0.003, 0.5, Vector3(-r - 0.1, 0.003, 0.15), band, Vector3(PI * 0.5, 0.9, 0.0), 6)
+	Kit.cylinder(hs, 0.005, 0.005, 0.014, Vector3(r + 0.075, 0.012, 0.115), pad, Vector3(PI * 0.5, 0.0, -0.5), 10)
+	# Coiled cord running off toward the console jack.
+	Kit.cylinder(hs, 0.0028, 0.0028, 0.42, Vector3(-r - 0.08, 0.003, -0.15), band, Vector3(PI * 0.5, 0.0, 0.7), 6)
 
 
 func _mug(p: Vector3) -> void:
@@ -244,6 +296,6 @@ func _vccs(p: Vector3) -> void:
 	for row in 3:
 		for col in 4:
 			var on := (row == 0 and col == 0) or (row == 1 and col == 2)
-			var c := Color(0.25, 0.9, 0.45) if on else Color(0.35, 0.45, 0.55)
+			var c := Color(0.25, 0.9, 0.45) if on else Color(0.45, 0.55, 0.65)
 			Kit.box(v, Vector3(0.038, 0.002, 0.03), Vector3(-0.066 + col * 0.044, 0.041, -0.045 + row * 0.04),
-				Kit.mat(c * 0.1, 0.3, 0.0, c, 0.5 if on else 0.12), 0.0)
+				Kit.mat(c * 0.1, 0.3, 0.0, c, 1.2 if on else 0.35), 0.0)

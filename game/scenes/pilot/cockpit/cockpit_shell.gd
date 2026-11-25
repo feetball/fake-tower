@@ -13,10 +13,10 @@ const M := preload("res://scenes/pilot/cockpit/cockpit_materials.gd")
 ## Window openings (aircraft frame). Each = [bottom-outer, bottom-inner, top-inner, top-outer].
 const C := 0.53 ## = CockpitLayout.CENTRE_X
 static var FRONT_LEFT: Array[Vector3] = [
-	Vector3(-0.43, -0.175, -0.96), Vector3(C - 0.035, -0.175, -1.17),
+	Vector3(-0.43, -0.315, -0.98), Vector3(C - 0.035, -0.34, -1.2),
 	Vector3(C - 0.035, 0.235, -0.83), Vector3(-0.43, 0.22, -0.67)]
 static var SIDE_LEFT: Array[Vector3] = [
-	Vector3(-0.475, -0.2, -0.88), Vector3(-0.575, -0.27, -0.36),
+	Vector3(-0.475, -0.33, -0.9), Vector3(-0.575, -0.36, -0.36),
 	Vector3(-0.575, 0.19, -0.36), Vector3(-0.49, 0.205, -0.62)]
 
 
@@ -75,18 +75,18 @@ func _screw_mesh() -> Mesh:
 
 func _build_glareshield() -> void:
 	var p := PackedVector2Array()
-	p.append(Vector2(-0.835, -0.365))
-	p.append_array(K.bezier(Vector2(-0.72, -0.315), Vector2(-0.668, -0.3), Vector2(-0.67, -0.27), 5))
-	p.append_array(K.bezier(Vector2(-0.668, -0.205), Vector2(-0.664, -0.172), Vector2(-0.7, -0.168), 5))
-	p.append(Vector2(-1.0, -0.158))
-	p.append(Vector2(-1.2, -0.16))
-	p.append(Vector2(-1.2, -0.42))
-	p.append(Vector2(-0.86, -0.42))
+	p.append(Vector2(-0.835, -0.415))
+	p.append_array(K.bezier(Vector2(-0.72, -0.37), Vector2(-0.668, -0.355), Vector2(-0.67, -0.325), 5))
+	p.append_array(K.bezier(Vector2(-0.668, -0.26), Vector2(-0.664, -0.228), Vector2(-0.7, -0.224), 5))
+	p.append(Vector2(-0.95, -0.27))
+	p.append(Vector2(-1.25, -0.345))
+	p.append(Vector2(-1.25, -0.47))
+	p.append(Vector2(-0.86, -0.47))
 	var mesh := K.extrude_x(p, -0.5, 2.0 * C + 0.5, 30.0)
 	K.add(self, mesh, M.get_mat("glareshield"), Transform3D.IDENTITY, "Glareshield")
 	# Under-lip light strip housing (the flood lights sit behind it).
 	K.add(self, K.rounded_box(Vector3(1.9, 0.012, 0.03), 0.004), M.get_mat("trim"),
-		Transform3D(Basis.IDENTITY, Vector3(C, -0.318, -0.71)), "LipStrip")
+		Transform3D(Basis.IDENTITY, Vector3(C, -0.373, -0.71)), "LipStrip")
 
 
 func _build_frames() -> void:
@@ -95,23 +95,23 @@ func _build_frames() -> void:
 		var fl := FRONT_LEFT if side == 0 else mirror(FRONT_LEFT)
 		var sl := SIDE_LEFT if side == 0 else mirror(SIDE_LEFT)
 		# Header over the front pane and the sill under it.
-		_bar(fl[3], fl[2], 0.075, 0.09, frame)
-		_bar(fl[0], fl[1], 0.04, 0.05, frame)
-		# Side post between the front and side windows: the thick one.
-		_bar(fl[0].lerp(sl[0], 0.5) + Vector3(0, -0.02, 0), fl[3].lerp(sl[3], 0.5) + Vector3(0, 0.02, 0), 0.095, 0.12, frame)
+		_bar(fl[3], fl[2], 0.07, 0.035, frame)
+		_bar(fl[0], fl[1], 0.04, 0.025, frame)
+		# Side post between the front and side windows: the wide one.
+		_bar(fl[0].lerp(sl[0], 0.5) + Vector3(0, -0.02, 0), fl[3].lerp(sl[3], 0.5) + Vector3(0, 0.02, 0), 0.085, 0.045, frame)
 		# Side window frame.
-		_bar(sl[3], sl[2], 0.06, 0.07, frame)
-		_bar(sl[2], sl[1], 0.07, 0.08, frame)
-		_bar(sl[0], sl[1], 0.06, 0.08, frame)
+		_bar(sl[3], sl[2], 0.055, 0.03, frame)
+		_bar(sl[2], sl[1], 0.065, 0.035, frame)
+		_bar(sl[0], sl[1], 0.055, 0.03, frame)
 	# Centre post.
-	_bar(Vector3(C, -0.2, -1.19), Vector3(C, 0.25, -0.82), 0.075, 0.1, frame)
+	_bar(Vector3(C, -0.36, -1.22), Vector3(C, 0.25, -0.82), 0.07, 0.04, frame)
 
 
 ## A rounded bar from a to b with cross-section w x d, depth axis roughly outward.
 func _bar(a: Vector3, b: Vector3, w: float, d: float, mat: Material) -> void:
 	var xf := K.between(a, b, (a + b) * 0.5 - Vector3(C, 0.0, -0.4))
 	var len := a.distance_to(b) + w * 0.6
-	K.add(self, K.rounded_box(Vector3(w, d, len), minf(w, d) * 0.3), mat, xf, "Frame")
+	K.add(self, K.rounded_box(Vector3(w, d, len), minf(w, d) * 0.35), mat, xf, "Frame")
 
 
 func _build_roof() -> void:
@@ -183,7 +183,7 @@ func _build_side(side: float) -> void:
 		lining, Transform3D.IDENTITY, "RearWall")
 	# Window sill / armrest ledge.
 	K.add(self, K.rounded_box(Vector3(0.1, 0.035, 0.6), 0.012), M.get_mat("trim"),
-		Transform3D(Basis(Vector3.UP, deg_to_rad(-11.0 * inward)), Vector3(sl[0].x + inward * 0.03, -0.29, -0.6)), "Sill")
+		Transform3D(Basis(Vector3.UP, deg_to_rad(-11.0 * inward)), Vector3(sl[0].x + inward * 0.03, -0.38, -0.6)), "Sill")
 	# Side console with the sidestick (captain) / tiller.
 	var cx := -0.47 if side > 0.0 else 2.0 * C + 0.47
 	var console := Node3D.new()

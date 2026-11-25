@@ -6,7 +6,7 @@ extends Camera3D
 ## release); a slow breathing drift runs in the room framing only.
 
 const SCOPE_FOV := 32.0
-const ROOM_FOV := 58.0
+const ROOM_FOV := 62.0
 const BLEND_SPEED := 2.6 ## framing transitions per second
 const LOOK_SENS := 0.0042 ## radians per canvas pixel
 const LOOK_YAW_MAX := 1.9
@@ -14,8 +14,8 @@ const LOOK_PITCH_MIN := -0.75
 const LOOK_PITCH_MAX := 0.6
 
 var rig: Node3D ## display_rig.gd
-var room_eye := Vector3(0.22, 1.27, 0.72)
-var room_target := Vector3(0.05, 0.98, -0.85)
+var room_eye := Vector3(0.48, 1.4, 1.15)
+var room_target := Vector3(-0.2, 1.0, -0.85)
 var target_room := false
 var blend := 0.0 ## 0 = scope framing, 1 = room framing
 var look := Vector2.ZERO ## yaw, pitch

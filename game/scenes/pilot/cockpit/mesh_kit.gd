@@ -196,6 +196,51 @@ static func cylinder(radius: float, height: float, segs: int = 24, top_radius: f
 	return c
 
 
+## Flat unshaded text on a panel face (local +Z towards the viewer). `height_m`
+## is the approximate cap height. HDR `col` values make legends glow.
+static func legend(parent: Node3D, txt: String, height_m: float, col: Color, pos: Vector3, mono: bool = false) -> Label3D:
+	var l := Label3D.new()
+	l.text = txt
+	l.font = Avionics.font() if mono else Avionics.sans()
+	l.font_size = 48
+	l.pixel_size = height_m / (48.0 * 0.72)
+	l.modulate = col
+	l.outline_size = 0
+	l.shaded = false
+	l.double_sided = false
+	l.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
+	l.alpha_antialiasing_mode = BaseMaterial3D.ALPHA_ANTIALIASING_ALPHA_TO_COVERAGE
+	l.position = pos
+	l.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	parent.add_child(l)
+	return l
+
+
+## A rotary knob on a panel face, axis along local +Z: collar, knurled body,
+## cap and a white index mark. Returns the rotating part.
+static func knob(parent: Node3D, pos: Vector3, radius: float, depth: float) -> Node3D:
+	var root := Node3D.new()
+	root.position = pos
+	parent.add_child(root)
+	var axis := Basis(Vector3.RIGHT, PI * 0.5)
+	add(root, cylinder(radius * 1.22, 0.003, 32), CockpitMaterials.get_mat("bezel"), Transform3D(axis, Vector3(0, 0, 0.0015)))
+	var spin := Node3D.new()
+	spin.name = "Spin"
+	root.add_child(spin)
+	add(spin, cylinder(radius, depth * 0.8, 40, radius * 0.97), CockpitMaterials.get_mat("knob"), Transform3D(axis, Vector3(0, 0, depth * 0.4)))
+	# Knurling: thin ribs around the grip.
+	var ribs: Array[Transform3D] = []
+	var n := 24
+	for i in n:
+		var a := TAU * i / n
+		ribs.append(Transform3D(Basis(Vector3.BACK, a), Vector3(cos(a), sin(a), 0.0) * radius * 0.985 + Vector3(0, 0, depth * 0.42)))
+	multi(spin, rounded_box(Vector3(radius * 0.09, radius * 0.09, depth * 0.62), radius * 0.03), CockpitMaterials.get_mat("knob"), ribs)
+	add(spin, cylinder(radius * 0.86, 0.004, 40), CockpitMaterials.get_mat("panel_dark"), Transform3D(axis, Vector3(0, 0, depth * 0.82)))
+	add(spin, rounded_box(Vector3(radius * 0.12, radius * 0.7, 0.002), 0.0005), CockpitMaterials.get_mat("lever_white"),
+		Transform3D(Basis.IDENTITY, Vector3(0, radius * 0.45, depth * 0.85)))
+	return spin
+
+
 ## MultiMesh of `mesh` at `xfs`, as a MultiMeshInstance3D under parent.
 static func multi(parent: Node3D, mesh: Mesh, mat: Material, xfs: Array[Transform3D], node_name: String = "") -> MultiMeshInstance3D:
 	var mm := MultiMesh.new()

@@ -8,6 +8,7 @@ extends Node3D
 
 const FIELD_FT := 512.0
 const TOWN_SEED := 4127
+const LIGHT_EXTINCTION := 0.6
 
 var world_root: Node3D
 var env: Environment
@@ -78,10 +79,16 @@ func set_quality(q: String) -> void:
 	_volumetric = q != "low"
 	if env != null:
 		env.volumetric_fog_enabled = _volumetric
-		env.ssr_enabled = q == "high"
+		# SSR plus SubViewport displays crashes the llvmpipe software rasterizer
+		# (used for off-screen screenshots); real GPUs keep it on high.
+		env.ssr_enabled = q == "high" and not is_software_renderer()
 		env.volumetric_fog_length = 900.0 if q == "high" else 500.0
 	if _fog_banks != null:
 		_fog_banks.visible = q == "high"
+
+
+static func is_software_renderer() -> bool:
+	return RenderingServer.get_video_adapter_name().to_lower().contains("llvmpipe")
 
 
 func set_eye(eye: Vector3) -> void:
@@ -91,7 +98,7 @@ func set_eye(eye: Vector3) -> void:
 
 
 func _make_environment() -> Environment:
-	var e := NightEnvironment.make(weather.visibility_m, 1.0, true, true)
+	var e := NightEnvironment.make(weather.visibility_m, 1.0, true, not is_software_renderer())
 	e.background_energy_multiplier = 0.35
 	e.ambient_light_energy = 0.6
 	e.fog_light_color = Color(0.035, 0.038, 0.046)
@@ -122,22 +129,29 @@ func _update_fog() -> void:
 	# adds the local medium around the aircraft that the lights scatter in.
 	env.fog_density = ground_sigma * 0.55
 	env.volumetric_fog_density = local_sigma * 0.9
+	# Lights are seen much further than dark objects (Allard vs Koschmieder).
 	for lp in _airport_lights:
-		lp.extinction_per_m = ground_sigma
+		lp.extinction_per_m = ground_sigma * LIGHT_EXTINCTION
 		lp.apply_uniforms()
 	if terrain != null:
 		for i in terrain.summit_lights.size():
 			var lp := terrain.summit_lights[i]
-			lp.extinction_per_m = weather.mean_sigma(h, terrain.summit_heights_ft[i] - FIELD_FT)
+			lp.extinction_per_m = weather.mean_sigma(h, terrain.summit_heights_ft[i] - FIELD_FT) * LIGHT_EXTINCTION
 			lp.apply_uniforms()
 	for i in _town_lights.size():
-		_town_lights[i].extinction_per_m = weather.mean_sigma(h, _town_heights_ft[i])
+		_town_lights[i].extinction_per_m = weather.mean_sigma(h, _town_heights_ft[i]) * LIGHT_EXTINCTION
 		_town_lights[i].apply_uniforms()
 
 
 func _collect_airport_lights() -> void:
 	_airport_lights.clear()
 	_collect(airport, _airport_lights)
+	# Seen from the approach through fog: brighter cores and wider scattering
+	# halos than the menu backdrop's settings.
+	for lp in _airport_lights:
+		lp.intensity_scale = 1.8
+		lp.halo_gain *= 2.2
+		lp.min_halo_angle = 0.04
 	_last_sigma = -1.0
 
 

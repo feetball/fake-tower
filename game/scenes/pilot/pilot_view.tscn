@@ -1,4 +1,4 @@
-[gd_scene load_steps=7 format=3]
+[gd_scene load_steps=17 format=3]
 
 [ext_resource type="Script" path="res://scenes/pilot/pilot_view.gd" id="1"]
 [ext_resource type="Script" path="res://core/shot_helper.gd" id="2"]
@@ -6,6 +6,14 @@
 [ext_resource type="Script" path="res://scenes/pilot/outside/pilot_outside.gd" id="4"]
 [ext_resource type="Script" path="res://scenes/pilot/cockpit/cockpit.gd" id="5"]
 [ext_resource type="Script" path="res://scenes/pilot/camera_rig.gd" id="6"]
+[ext_resource type="Script" path="res://scenes/pilot/autopilot_controller.gd" id="7"]
+[ext_resource type="Script" path="res://scenes/pilot/instruments/avionics_bus.gd" id="8"]
+[ext_resource type="Script" path="res://scenes/pilot/outside/aircraft_lights.gd" id="9"]
+[ext_resource type="Script" path="res://scenes/pilot/cockpit_interaction.gd" id="10"]
+[ext_resource type="Script" path="res://scenes/pilot/audio/cockpit_audio.gd" id="11"]
+[ext_resource type="Script" path="res://scenes/pilot/efb/efb.gd" id="12"]
+[ext_resource type="Script" path="res://scenes/pilot/overlay/outcome_overlay.gd" id="13"]
+[ext_resource type="Script" path="res://scenes/pilot/overlay/view_hint.gd" id="14"]
 
 [node name="PilotView" type="Node3D"]
 script = ExtResource("1")
@@ -16,6 +24,12 @@ script = ExtResource("2")
 [node name="FlightState" type="Node" parent="."]
 script = ExtResource("3")
 
+[node name="Autopilot" type="Node" parent="."]
+script = ExtResource("7")
+
+[node name="AvionicsBus" type="Node" parent="."]
+script = ExtResource("8")
+
 [node name="Outside" type="Node3D" parent="."]
 script = ExtResource("4")
 
@@ -24,5 +38,44 @@ script = ExtResource("4")
 [node name="Cockpit" type="Node3D" parent="Aircraft"]
 script = ExtResource("5")
 
+[node name="ExteriorLights" type="Node3D" parent="Aircraft"]
+script = ExtResource("9")
+
 [node name="CameraRig" type="Node3D" parent="Aircraft"]
 script = ExtResource("6")
+
+[node name="Interaction" type="Node" parent="."]
+script = ExtResource("10")
+
+[node name="Audio" type="AudioStreamPlayer" parent="."]
+script = ExtResource("11")
+
+[node name="Overlay" type="CanvasLayer" parent="."]
+layer = 5
+
+[node name="Efb" type="Control" parent="Overlay"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+script = ExtResource("12")
+
+[node name="Outcome" type="Control" parent="Overlay"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+script = ExtResource("13")
+
+[node name="Hint" type="Label" parent="Overlay"]
+script = ExtResource("14")
+
+[node name="Tooltip" type="Label" parent="Overlay"]
+visible = false
+mouse_filter = 2

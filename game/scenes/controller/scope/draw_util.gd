@@ -20,9 +20,11 @@ static func text_width(font: Font, s: String, size: int) -> float:
 	return font.get_string_size(s, HORIZONTAL_ALIGNMENT_LEFT, -1, size).x
 
 
-## Dashed polyline with the dash pattern continuing across vertices.
+## Dashed polyline with the dash pattern continuing across vertices, drawn
+## as one multiline command.
 static func dashed_polyline(ci: CanvasItem, pts: PackedVector2Array, col: Color, width: float,
 		dash: float, gap: float) -> void:
+	var segs := PackedVector2Array()
 	var on := true
 	var left := dash
 	for i in range(pts.size() - 1):
@@ -34,12 +36,15 @@ static func dashed_polyline(ci: CanvasItem, pts: PackedVector2Array, col: Color,
 		while t < seg:
 			var step := minf(left, seg - t)
 			if on:
-				ci.draw_line(a + dir * t, a + dir * (t + step), col, width, true)
+				segs.append(a + dir * t)
+				segs.append(a + dir * (t + step))
 			t += step
 			left -= step
 			if left <= 0.0001:
 				on = not on
 				left = dash if on else gap
+	if not segs.is_empty():
+		ci.draw_multiline(segs, col, width, true)
 
 
 static func circle_points(c: Vector2, r: float, n: int) -> PackedVector2Array:

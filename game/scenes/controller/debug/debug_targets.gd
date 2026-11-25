@@ -1,7 +1,7 @@
 extends RefCounted
 ## Hand-made radar picture for screenshots (user arg --ctrl-debug-targets):
 ## a conflict pair, an MSAW target, one on final, one crashed, one landed and
-## an outer arrival. sweeps() returns eleven consecutive 2 s sweeps so the
+## an outer arrival. sweeps() returns sixteen consecutive 2 s sweeps so the
 ## history trails are populated.
 
 const Fmt := preload("res://scenes/controller/scope/scope_format.gd")
@@ -27,7 +27,7 @@ const EVENTS: Array[Dictionary] = [
 
 static func sweeps() -> Array[Array]:
 	var out: Array[Array] = []
-	for back in range(10, -1, -1):
+	for back in range(15, -1, -1):
 		var sweep: Array = []
 		for row in TARGETS:
 			var t := _target(row)

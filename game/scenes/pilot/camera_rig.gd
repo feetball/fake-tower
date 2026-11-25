@@ -3,15 +3,15 @@ extends Node3D
 ## The pilot's head: fixed eye point with three framings (panel, outside,
 ## pedestal), smooth mouse-look while the right mouse button is held, and small
 ## head motion from turbulence, bank changes and touchdown jolts.
-## Keys 1 / 2 / 3 snap between the framings.
+## Keys 1 / 2 / 3 snap between the framings; the wheel over empty space zooms.
 
 signal view_changed(view_name: String)
 
 ## name -> [head offset (aircraft frame, m), yaw deg, pitch deg, vertical fov deg]
 const VIEWS := {
-	"panel": [Vector3(0.1, -0.13, -0.16), -9.0, -32.0, 52.0],
-	"outside": [Vector3(0.0, 0.0, 0.0), 0.0, -6.0, 60.0],
-	"pedestal": [Vector3(0.22, -0.08, -0.05), -38.0, -58.0, 58.0],
+	"panel": [Vector3(0.24, -0.1, -0.06), -1.0, -28.0, 40.0],
+	"outside": [Vector3(0.0, 0.03, 0.0), 0.0, -9.0, 58.0],
+	"pedestal": [Vector3(0.3, -0.08, 0.02), -30.0, -52.0, 56.0],
 }
 const LOOK_YAW_LIMIT := 110.0
 const LOOK_PITCH_UP := 35.0
@@ -36,6 +36,7 @@ var _off := Vector3.ZERO
 var _yaw := 0.0
 var _pitch := 0.0
 var _looking := false
+var _zoom := 1.0
 var _jolt := Vector3.ZERO
 var _jolt_v := Vector3.ZERO
 var _t := 0.0
@@ -64,6 +65,7 @@ func set_view(v: String, instant: bool = false) -> void:
 	_target_fov = spec[3]
 	_look_yaw = 0.0
 	_look_pitch = 0.0
+	_zoom = 1.0
 	if instant:
 		_off = _target_off
 		_yaw = _target_yaw
@@ -83,6 +85,10 @@ func _unhandled_input(event: InputEvent) -> void:
 		var mb := event as InputEventMouseButton
 		if mb.button_index == MOUSE_BUTTON_RIGHT:
 			_looking = mb.pressed
+			get_viewport().set_input_as_handled()
+		elif mb.pressed and mb.button_index in [MOUSE_BUTTON_WHEEL_UP, MOUSE_BUTTON_WHEEL_DOWN]:
+			# Wheel over empty space zooms (knobs take the wheel first).
+			_zoom = clampf(_zoom * (0.88 if mb.button_index == MOUSE_BUTTON_WHEEL_UP else 1.0 / 0.88), 0.35, 1.0)
 			get_viewport().set_input_as_handled()
 	elif event is InputEventMouseMotion and _looking:
 		var mm := event as InputEventMouseMotion
@@ -106,7 +112,7 @@ func update_motion(delta: float, bank_deg: float) -> void:
 	_off = _off.lerp(_target_off, k)
 	_yaw = lerpf(_yaw, _target_yaw + _look_yaw, k)
 	_pitch = lerpf(_pitch, _target_pitch + _look_pitch, k)
-	camera.fov = lerpf(camera.fov, _target_fov, k)
+	camera.fov = lerpf(camera.fov, _target_fov * _zoom, k)
 	# Damped spring for jolts.
 	_jolt_v += (-_jolt * 160.0 - _jolt_v * 14.0) * delta
 	_jolt += _jolt_v * delta

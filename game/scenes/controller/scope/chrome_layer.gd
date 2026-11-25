@@ -1,7 +1,6 @@
 extends Control
 ## On-glass chrome: the menu bar (layer toggles, range, reset), the system
-## status area, the alert list, the range/bearing line, the cursor readout and
-## a one-line help. Fills ctx.dcb_rects for hit testing.
+## status area, the alert list, the cursor readout and a one-line help. Fills ctx.dcb_rects for hit testing.
 
 const Ctx := preload("res://scenes/controller/scope/scope_ctx.gd")
 const Look := preload("res://scenes/controller/scope/scope_theme.gd")
@@ -20,9 +19,7 @@ func _draw() -> void:
 	_dcb()
 	if ctx.world.is_empty():
 		return
-	var y := _status()
-	_alert_list(y)
-	_rbl()
+	_status()
 	_footer()
 
 
@@ -63,14 +60,13 @@ func _button(r: Rect2, id: String, label: String, on: bool, font: Font, fsz: int
 	ctx.dcb_rects.append({"id": id, "rect": r})
 
 
-## System status block under the menu bar. Returns the y below it.
-func _status() -> float:
+## System status block under the menu bar, with the alert list below it.
+func _status() -> void:
 	var font := ctx.mono(600)
 	var fsz := ctx.fs(14.0)
 	var lh := font.get_height(fsz) * 1.08
 	var age := ctx.model.sweep_age_sec(ctx.now_ms)
 	var sep := ctx.sep()
-	print("DBG chrome age ", age, " now ", ctx.now_ms)
 	var lines: Array[Array] = [
 		["%s   %s" % [String(ctx.status.get("icao", "")), Fmt.mmss(float(ctx.status.get("time", 0.0)))], Look.HUD],
 		["ATIS %s  QNH %s" % [String(ctx.status.get("atis_letter", "-")), str(ctx.status.get("qnh", "----"))], Look.HUD],
@@ -78,17 +74,20 @@ func _status() -> float:
 		["SEP %dNM/%dFT" % [int(sep["lateral_nm"]), int(sep["vertical_ft"])], Look.HUD],
 		["NO RADAR DATA" if age < 0.0 else "SWEEP %.1fs" % age, Look.LA if age < 0.0 or age > 4.5 else Look.HUD],
 	]
+	var alerts := _alert_rows()
 	var x := ctx.px(14.0)
 	var y := ctx.dcb_h + ctx.px(12.0)
-	var w := ctx.px(196.0)
-	draw_rect(Rect2(x - ctx.px(6.0), y - ctx.px(5.0), w, lh * lines.size() + ctx.px(10.0)), Color(Look.BG, 0.75))
+	var h := lh * lines.size() + ctx.px(10.0)
+	if not alerts.is_empty():
+		h += ctx.px(8.0) + lh * alerts.size()
+	draw_rect(Rect2(x - ctx.px(6.0), y - ctx.px(5.0), ctx.px(250.0), h), Color(Look.BG, 0.88))
 	for l in lines:
 		DU.text(self, font, Vector2(x, y), String(l[0]), fsz, l[1])
 		y += lh
-	return y + ctx.px(10.0)
+	_alert_list(alerts, y + ctx.px(8.0), lh)
 
 
-func _alert_list(y0: float) -> void:
+func _alert_rows() -> Array[Array]:
 	var ca := PackedStringArray()
 	var la := PackedStringArray()
 	for cs in ctx.model.order:
@@ -99,43 +98,26 @@ func _alert_list(y0: float) -> void:
 			ca.append(cs)
 		if bool(t.get("msaw", false)):
 			la.append(cs)
-	if ca.is_empty() and la.is_empty():
-		return
+	var rows: Array[Array] = []
+	if not ca.is_empty():
+		rows.append(["CA", ca, Look.CA])
+	if not la.is_empty():
+		rows.append(["LA", la, Look.LA])
+	return rows
+
+
+func _alert_list(rows: Array[Array], y0: float, lh: float) -> void:
 	var font := ctx.mono(700)
 	var fsz := ctx.fs(14.0)
-	var lh := font.get_height(fsz) * 1.08
 	var x := ctx.px(14.0)
 	var y := y0
 	var flash := ctx.flash_on or ctx.force_flash
-	for row: Array in [["CA", ca, Look.CA], ["LA", la, Look.LA]]:
+	for row in rows:
 		var names: PackedStringArray = row[1]
-		if names.is_empty():
-			continue
 		var col: Color = row[2]
 		DU.text(self, font, Vector2(x, y), String(row[0]), fsz, col if flash else col.darkened(0.4), -1, -1, ctx.px(4.0), Look.BG)
 		DU.text(self, font, Vector2(x + ctx.px(36.0), y), " ".join(names), fsz, col, -1, -1, ctx.px(4.0), Look.BG)
 		y += lh
-
-
-func _rbl() -> void:
-	if not ctx.rbl_active:
-		return
-	var a := ctx.xform.to_screen(ctx.rbl_a)
-	var b := ctx.xform.to_screen(ctx.rbl_b)
-	draw_line(a, b, Look.RBL, ctx.px(1.3), true)
-	draw_circle(a, ctx.px(3.0), Look.RBL)
-	draw_circle(b, ctx.px(3.0), Look.RBL)
-	var dist := ctx.rbl_a.distance_to(ctx.rbl_b)
-	if dist < 0.05:
-		return
-	var label := "BRG %s° / %.1f NM" % [Fmt.hdg_text(Fmt.bearing_to(ctx.rbl_a, ctx.rbl_b)), dist]
-	var font := ctx.mono(700)
-	var fsz := ctx.fs(14.0)
-	var mid := (a + b) * 0.5 + Vector2(ctx.px(12.0), -ctx.px(12.0))
-	var w := DU.text_width(font, label, fsz)
-	var h := font.get_height(fsz)
-	draw_rect(Rect2(mid.x - ctx.px(5.0), mid.y - h * 0.5 - ctx.px(3.0), w + ctx.px(10.0), h + ctx.px(6.0)), Look.BLOCK_BACK)
-	DU.text(self, font, mid, label, fsz, Look.RBL, -1, 0)
 
 
 func _footer() -> void:

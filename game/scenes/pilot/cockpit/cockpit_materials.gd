@@ -19,19 +19,19 @@ static func get_mat(kind: String) -> Material:
 static func _build(kind: String) -> Material:
 	match kind:
 		"panel":
-			# Airbus-ish blue-grey painted metal, satin.
-			return _pbr("metal_plate_painted", Color(0.2, 0.225, 0.25), 2.5, 0.85, 0.35, 0.0)
+			# Airbus-ish blue-grey paint, satin, with a little orange-peel and wear.
+			return _paint(Color(0.15, 0.17, 0.19), 0.55)
 		"panel_dark":
-			return _pbr("metal_plate_painted", Color(0.085, 0.095, 0.105), 2.5, 0.9, 0.45, 0.0)
+			return _paint(Color(0.07, 0.078, 0.086), 0.6)
 		"glareshield":
 			return _pbr("leather_seat_02", Color(0.075, 0.075, 0.08), 6.0, 1.0, 0.75, 0.0)
 		"trim":
 			return _pbr("rubber_dark_trim", Color(0.32, 0.33, 0.34), 3.0, 1.0, 0.7, 0.0)
 		"frame":
-			# Window frames and lining: lighter grey padded/painted surfaces.
-			return _pbr("metal_plate_painted", Color(0.3, 0.32, 0.34), 2.0, 0.9, 0.45, 0.0)
+			# Window frames: lighter grey padded/painted surfaces.
+			return _paint(Color(0.26, 0.275, 0.29), 0.62)
 		"lining":
-			return _pbr("leather_seat_brown", Color(0.24, 0.245, 0.25), 3.0, 1.0, 0.8, 0.0)
+			return _paint(Color(0.12, 0.125, 0.13), 0.85)
 		"seat":
 			return _pbr("leather_seat_brown", Color(0.22, 0.2, 0.19), 5.0, 1.0, 0.55, 0.0)
 		"knob":
@@ -55,6 +55,45 @@ static func _build(kind: String) -> Material:
 			return m
 	push_warning("CockpitMaterials: unknown kind %s" % kind)
 	return _flat(Color.MAGENTA, 0.5, 0.0)
+
+
+## Painted metal without the texture set's tile seams: procedural noise drives
+## roughness (worn, satin patches) and a faint orange-peel normal.
+static func _paint(col: Color, rough: float) -> StandardMaterial3D:
+	var m := _flat(col, rough, 0.0)
+	var n := FastNoiseLite.new()
+	n.noise_type = FastNoiseLite.TYPE_SIMPLEX_SMOOTH
+	n.frequency = 0.006
+	n.fractal_octaves = 3
+	n.fractal_gain = 0.35
+	var rt := NoiseTexture2D.new()
+	rt.width = 512
+	rt.height = 512
+	rt.seamless = true
+	rt.noise = n
+	m.roughness_texture = rt
+	m.roughness = rough * 1.1
+	# Keep the variation subtle: the texture only modulates around `rough`.
+	rt.color_ramp = Gradient.new()
+	rt.color_ramp.set_color(0, Color(0.82, 0.82, 0.82))
+	rt.color_ramp.set_color(1, Color(1.0, 1.0, 1.0))
+	var pn := FastNoiseLite.new()
+	pn.noise_type = FastNoiseLite.TYPE_SIMPLEX
+	pn.frequency = 0.35
+	var nt := NoiseTexture2D.new()
+	nt.width = 256
+	nt.height = 256
+	nt.seamless = true
+	nt.as_normal_map = true
+	nt.bump_strength = 0.6
+	nt.noise = pn
+	m.normal_enabled = true
+	m.normal_texture = nt
+	m.normal_scale = 0.05
+	m.uv1_triplanar = true
+	m.uv1_world_triplanar = false
+	m.uv1_scale = Vector3(3.0, 3.0, 3.0)
+	return m
 
 
 static func _flat(col: Color, rough: float, metal: float) -> StandardMaterial3D:

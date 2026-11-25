@@ -30,7 +30,29 @@ func _ready() -> void:
 	for i in NEIGHBOURS.size():
 		_neighbour(NEIGHBOURS[i], i)
 	_back_of_room()
-	_wall_clock(Vector3(0.17, 2.32, ROOM_MIN.z + 0.06))
+	_wall_clock(Vector3(-1.3, 2.05, ROOM_MIN.z + 0.06))
+	# A dimmed downlight at the back of the room so shapes separate from black.
+	var fill := OmniLight3D.new()
+	fill.light_color = Color(0.55, 0.62, 0.75)
+	fill.light_energy = 0.35
+	fill.omni_range = 6.0
+	fill.omni_attenuation = 1.5
+	fill.light_specular = 0.1
+	fill.light_volumetric_fog_energy = 0.3
+	fill.position = Vector3(0.5, 2.8, 2.6)
+	add_child(fill)
+	# Dim cove wash on the acoustic wall behind the row of positions.
+	var wash := SpotLight3D.new()
+	wash.light_color = Color(0.5, 0.58, 0.72)
+	wash.light_energy = 3.5
+	wash.spot_range = 4.5
+	wash.spot_angle = 62.0
+	wash.spot_angle_attenuation = 1.5
+	wash.light_specular = 0.05
+	wash.light_volumetric_fog_energy = 0.2
+	wash.position = Vector3(-0.6, 2.9, -0.3)
+	add_child(wash)
+	wash.look_at(Vector3(-0.6, 1.4, ROOM_MIN.z), Vector3.UP)
 
 
 func _environment() -> void:
@@ -39,7 +61,7 @@ func _environment() -> void:
 	environment.background_color = Color(0.0, 0.0, 0.0)
 	environment.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 	environment.ambient_light_color = Color(0.05, 0.06, 0.07)
-	environment.ambient_light_energy = 0.25
+	environment.ambient_light_energy = 0.4
 	environment.reflected_light_source = Environment.REFLECTION_SOURCE_DISABLED
 	environment.tonemap_mode = Environment.TONE_MAPPER_FILMIC
 	environment.tonemap_exposure = 1.05
@@ -60,7 +82,7 @@ func _environment() -> void:
 	environment.set_glow_level(4, 0.7)
 	environment.set_glow_level(5, 0.4)
 	environment.volumetric_fog_enabled = true
-	environment.volumetric_fog_density = 0.012
+	environment.volumetric_fog_density = 0.018
 	environment.volumetric_fog_albedo = Color(0.8, 0.82, 0.85)
 	environment.volumetric_fog_emission = Color(0.0, 0.0, 0.0)
 	environment.volumetric_fog_anisotropy = 0.4
@@ -113,7 +135,7 @@ func _acoustic_wall(x0: float, x1: float, z: float, rot_y: float) -> void:
 	var tones: Array[Material] = []
 	for i in 3:
 		var c := Color(0.085, 0.09, 0.105).lerp(Color(0.07, 0.075, 0.085), i * 0.5)
-		tones.append(Kit.pbr("carpet_dirty", 0.35, c * 2.4, 1.0))
+		tones.append(Kit.pbr("carpet_dirty", 0.35, c * 5.0, 1.0))
 	var x := x0 + w * 0.5
 	var col := 0
 	while x < x1:
@@ -170,11 +192,11 @@ func _neighbour(x: float, idx: int) -> void:
 	if absf(x) < 3.0:
 		var l := OmniLight3D.new()
 		l.light_color = Color(0.5, 0.95, 0.68)
-		l.light_energy = 0.35
-		l.omni_range = 2.2
-		l.light_specular = 0.2
-		l.light_volumetric_fog_energy = 0.5
-		l.position = Vector3(0.0, 1.15, -0.6)
+		l.light_energy = 0.5
+		l.omni_range = 2.4
+		l.light_specular = 0.0
+		l.light_volumetric_fog_energy = 0.15
+		l.position = Vector3(0.0, 1.1, -0.45)
 		n.add_child(l)
 	var chair := Kit.model(n, "modern_arm_chair_01", Vector3(0.15, 0.0, 0.25), 180.0 + (idx * 17.0 - 25.0))
 	if chair != null:
@@ -184,8 +206,9 @@ func _neighbour(x: float, idx: int) -> void:
 func _back_of_room() -> void:
 	for i in 3:
 		var sx := -6.6 + i * 1.2
-		Kit.model(self, "steel_frame_shelves_01", Vector3(sx, 0.0, ROOM_MAX.z - 0.35), 180.0)
-		Kit.model(self, "power_box_01", Vector3(sx, 0.93, ROOM_MAX.z - 0.35), 180.0)
+		# This model is authored in decimetres.
+		Kit.model(self, "steel_frame_shelves_01", Vector3(sx, 0.0, ROOM_MAX.z - 0.3), 180.0, 0.1)
+		Kit.model(self, "power_box_01", Vector3(sx, 0.25, ROOM_MAX.z - 0.3), 180.0)
 	# Supervisor desk with a dim status monitor.
 	var desk := Kit.model(self, "metal_office_desk", Vector3(3.4, 0.0, 3.4), 180.0)
 	if desk != null:
@@ -199,17 +222,11 @@ func _back_of_room() -> void:
 		Vector3(0.0, -PI * 0.5, 0.0))
 	var door := Kit.mat(Color(0.08, 0.085, 0.09), 0.5, 0.3)
 	Kit.box(self, Vector3(0.06, 2.1, 1.0), Vector3(ROOM_MAX.x - 0.02, 1.05, 2.6), door, 0.01)
-	var el := OmniLight3D.new()
-	el.light_color = Color(0.3, 1.0, 0.5)
-	el.light_energy = 0.15
-	el.omni_range = 1.6
-	el.position = Vector3(ROOM_MAX.x - 0.3, 2.3, 2.6)
-	add_child(el)
 
 
 func _wall_clock(p: Vector3) -> void:
 	Kit.box(self, Vector3(0.62, 0.17, 0.05), p, Kit.mat(Color(0.02, 0.02, 0.022), 0.3, 0.1), 0.008)
-	_clock = Kit.label(self, "", p + Vector3(0.0, 0.0, 0.0265), 120, Color(1.0, 0.16, 0.1), 0.0009,
+	_clock = Kit.label(self, "", p + Vector3(0.0, 0.0, 0.0265), 120, Color(0.9, 0.12, 0.08), 0.0008,
 		Look.mono(700), Vector3.ZERO, true)
 	Kit.label(self, "UTC", p + Vector3(-0.24, 0.055, 0.0265), 40, Color(0.6, 0.12, 0.1), 0.0006, Look.sans(700),
 		Vector3.ZERO, true)

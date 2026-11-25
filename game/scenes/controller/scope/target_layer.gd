@@ -1,9 +1,9 @@
 extends Control
 ## Radar targets as of the last sweep: history trail, predicted track line,
 ## symbol, leader line and data block (with cheap automatic de-clutter),
-## CA/LA flashing, crashed X and the brief LND tag. Redrawn on sweeps, on
-## selection/leader/scratchpad changes, while the sweep persistence decays and
-## on flash ticks.
+## CA/LA flashing, crashed X, the brief LND tag and the range/bearing line.
+## Redrawn on sweeps, on selection/leader/scratchpad/RBL changes, while the
+## sweep persistence decays and on flash ticks.
 
 const Ctx := preload("res://scenes/controller/scope/scope_ctx.gd")
 const Look := preload("res://scenes/controller/scope/scope_theme.gd")
@@ -55,6 +55,7 @@ func _draw() -> void:
 				_landed(t)
 			_:
 				_flying(t, boost, obstacles)
+	_rbl()
 
 
 func _history(cs: String) -> void:
@@ -67,7 +68,7 @@ func _history(cs: String) -> void:
 		var p := ctx.xform.to_screen(hist[i])
 		var age := n - i # 1 = most recent
 		var a := 0.85 - 0.15 * (age - 1)
-		draw_circle(p, ctx.px(2.4), Color(Look.HIST, a))
+		draw_circle(p, ctx.px(2.1), Color(Look.HIST, a))
 
 
 func _flying(t: Dictionary, boost: float, obstacles: Array[Rect2]) -> void:
@@ -192,3 +193,24 @@ func _landed(t: Dictionary) -> void:
 	draw_rect(Rect2(p - Vector2(h, h), Vector2(h, h) * 2.0), col)
 	DU.text(self, ctx.mono(600), p + Vector2(ctx.px(7.0), ctx.px(4.0)), "%s LND" % cs, ctx.fs(12.0), col, -1, -1,
 		ctx.px(3.0), Look.BG)
+
+
+func _rbl() -> void:
+	if not ctx.rbl_active:
+		return
+	var a := ctx.xform.to_screen(ctx.rbl_a)
+	var b := ctx.xform.to_screen(ctx.rbl_b)
+	draw_line(a, b, Look.RBL, ctx.px(1.3), true)
+	draw_circle(a, ctx.px(3.0), Look.RBL)
+	draw_circle(b, ctx.px(3.0), Look.RBL)
+	var dist := ctx.rbl_a.distance_to(ctx.rbl_b)
+	if dist < 0.05:
+		return
+	var label := "BRG %s° / %.1f NM" % [Fmt.hdg_text(Fmt.bearing_to(ctx.rbl_a, ctx.rbl_b)), dist]
+	var font := ctx.mono(700)
+	var fsz := ctx.fs(14.0)
+	var mid := (a + b) * 0.5 + Vector2(ctx.px(12.0), -ctx.px(12.0))
+	var w := DU.text_width(font, label, fsz)
+	var h := font.get_height(fsz)
+	draw_rect(Rect2(mid.x - ctx.px(5.0), mid.y - h * 0.5 - ctx.px(3.0), w + ctx.px(10.0), h + ctx.px(6.0)), Look.BLOCK_BACK)
+	DU.text(self, font, mid, label, fsz, Look.RBL, -1, 0)

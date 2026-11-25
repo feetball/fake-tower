@@ -4,6 +4,14 @@ extends RefCounted
 
 const Look := preload("res://scenes/controller/scope/scope_theme.gd")
 
+## Multiplies every font size; the panel sets it before (re)building so text
+## stays legible when the window is small (canvas units shrink with it).
+static var text_scale := 1.0
+
+
+static func fs(size: int) -> int:
+	return int(round(size * text_scale))
+
 
 static func box(bg: Color, border: Color = Color.TRANSPARENT, bw: int = 0, mh: float = 8.0, mv: float = 6.0,
 		radius: int = 2) -> StyleBoxFlat:
@@ -25,7 +33,7 @@ static func label(text: String, size: int, col: Color, font: Font = null, align:
 	l.text = text
 	l.horizontal_alignment = align
 	l.add_theme_font_override(&"font", font if font != null else Look.mono(500))
-	l.add_theme_font_size_override(&"font_size", size)
+	l.add_theme_font_size_override(&"font_size", fs(size))
 	l.add_theme_color_override(&"font_color", col)
 	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	return l
@@ -71,7 +79,7 @@ static func flat_button(text: String, size: int, col: Color) -> Button:
 	b.focus_mode = Control.FOCUS_NONE
 	b.alignment = HORIZONTAL_ALIGNMENT_LEFT
 	b.add_theme_font_override(&"font", Look.mono(600))
-	b.add_theme_font_size_override(&"font_size", size)
+	b.add_theme_font_size_override(&"font_size", fs(size))
 	for s: StringName in [&"font_color", &"font_hover_color", &"font_pressed_color", &"font_focus_color"]:
 		b.add_theme_color_override(s, col)
 	b.add_theme_stylebox_override(&"normal", box(Color(0, 0, 0, 0), Color.TRANSPARENT, 0, 6, 3))

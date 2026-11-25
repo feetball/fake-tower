@@ -116,10 +116,11 @@ static func block_lines(t: Dictionary, scratch: String) -> PackedStringArray:
 	return out
 
 
+## Flight strip altitude in feet with trend ("=" when level).
 static func strip_alt_text(t: Dictionary) -> String:
 	var vs := int(t.get("vs_trend", 0))
 	var arrow := UP_ARROW if vs > 0 else (DOWN_ARROW if vs < 0 else "=")
-	return "%d ft %s" % [int(round(float(t.get("alt", 0.0)))), arrow]
+	return "%d %s" % [int(round(float(t.get("alt", 0.0)))), arrow]
 
 
 static func event_text(e: Dictionary) -> String:

@@ -80,3 +80,8 @@ func _tone(f: float) -> float:
 ## 4 ms attack/release so segments do not click.
 func _env(t: float, length: float) -> float:
 	return clampf(minf(t, length - t) / 0.004, 0.0, 1.0)
+
+
+func _exit_tree() -> void:
+	stop()
+	_playback = null

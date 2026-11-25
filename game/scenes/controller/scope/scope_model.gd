@@ -10,7 +10,7 @@ signal selection_changed(callsign: String)
 
 const HISTORY_LEN := 5
 ## History keeps every Nth sweep position: 2 s sweeps would put the dots on top of each other.
-const HISTORY_EVERY := 2
+const HISTORY_EVERY := 3
 const LANDED_SHOW_MS := 20000
 const ALERT_REPEAT_MS := 15000
 const LAYER_KEYS: PackedStringArray = ["rr", "cl", "fix", "terr", "msa", "hold", "ptl", "hist"]
