@@ -8,6 +8,7 @@ const FRAMINGS := {
 	"menu": [Vector3(-24.0, 19.0, 390.0), Vector3(-40.0, 8.0, -300.0)],
 	"lobby": [Vector3(-30.0, 22.0, 420.0), Vector3(-190.0, 10.0, -300.0)],
 	"cockpit": [Vector3(0.0, 46.0, 900.0), Vector3(0.0, 0.0, -400.0)],
+	"runway": [Vector3(-6.0, 12.0, -60.0), Vector3(0.0, 0.0, -1400.0)],
 }
 
 var camera: DriftCamera

@@ -17,6 +17,9 @@ const SHADER: Shader = preload("res://shaders/light_point.gdshader")
 @export var halo_size_m := 3.0
 @export var halo_gain := 0.08
 @export var intensity_scale := 1.0
+## Also draw wet-pavement reflections (mirrored streaks below this node's y = 0).
+@export var reflections := false
+@export var reflection_gain := 0.3
 ## Minimum apparent halo size (radians) so distant lights keep a soft glow.
 @export var min_halo_angle := 0.03
 
@@ -24,6 +27,8 @@ var _pos: PackedVector3Array = []
 var _col: PackedColorArray = []
 var _custom: PackedColorArray = []
 var _material: ShaderMaterial
+var _refl_material: ShaderMaterial
+var _refl: MultiMeshInstance3D
 
 
 func add_point(pos: Vector3, color: Color, intensity: float = 4.0, core_m: float = 0.35,
@@ -64,18 +69,53 @@ func commit() -> void:
 		_material = ShaderMaterial.new()
 		_material.shader = SHADER
 	material_override = _material
+	if reflections:
+		if _refl == null:
+			_refl = MultiMeshInstance3D.new()
+			_refl.name = "Reflections"
+			_refl.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+			_refl.extra_cull_margin = 80.0
+			_refl_material = ShaderMaterial.new()
+			_refl_material.shader = SHADER
+			_refl.material_override = _refl_material
+			add_child(_refl)
+		_refl.multimesh = mm
+	set_notify_transform(true)
 	apply_uniforms()
+
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_TRANSFORM_CHANGED or what == NOTIFICATION_ENTER_TREE:
+		_sync_reflection_transform()
+
+
+func _sync_reflection_transform() -> void:
+	if _refl == null or not is_inside_tree():
+		return
+	_refl_material.set_shader_parameter(&"ground_y", global_position.y)
 
 
 ## Re-apply exported parameters to the shader (call after changing them at runtime).
 func apply_uniforms() -> void:
 	if _material == null:
 		return
-	_material.set_shader_parameter(&"beam_dir", beam_dir)
-	_material.set_shader_parameter(&"beam_power", beam_power)
-	_material.set_shader_parameter(&"beam_min", beam_min)
-	_material.set_shader_parameter(&"extinction_per_m", extinction_per_m)
-	_material.set_shader_parameter(&"halo_size_m", halo_size_m)
-	_material.set_shader_parameter(&"halo_gain", halo_gain)
-	_material.set_shader_parameter(&"intensity_scale", intensity_scale)
-	_material.set_shader_parameter(&"min_halo_angle", min_halo_angle)
+	for m: ShaderMaterial in [_material, _refl_material]:
+		if m != null:
+			_apply_to(m)
+	if _refl_material != null:
+		_refl_material.set_shader_parameter(&"reflection", true)
+		_refl_material.set_shader_parameter(&"reflection_gain", reflection_gain)
+		_sync_reflection_transform()
+
+
+func _apply_to(m: ShaderMaterial) -> void:
+	if m == null:
+		return
+	m.set_shader_parameter(&"beam_dir", beam_dir)
+	m.set_shader_parameter(&"beam_power", beam_power)
+	m.set_shader_parameter(&"beam_min", beam_min)
+	m.set_shader_parameter(&"extinction_per_m", extinction_per_m)
+	m.set_shader_parameter(&"halo_size_m", halo_size_m)
+	m.set_shader_parameter(&"halo_gain", halo_gain)
+	m.set_shader_parameter(&"intensity_scale", intensity_scale)
+	m.set_shader_parameter(&"min_halo_angle", min_halo_angle)

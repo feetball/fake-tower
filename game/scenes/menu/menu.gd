@@ -95,11 +95,12 @@ func _build_how_to_play() -> Control:
 	body.add_child(win)
 	body.add_child(HowToPlay.build(false))
 	var panel := UiKit.panel(&"Glass", body)
-	panel.set_anchors_preset(Control.PRESET_RIGHT_WIDE)
-	panel.offset_left = -980.0
+	panel.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+	panel.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+	panel.offset_left = -930.0
 	panel.offset_right = -110.0
 	panel.offset_top = 150.0
-	panel.offset_bottom = -150.0
+	panel.offset_bottom = 150.0
 	root.add_child(panel)
 	root.visible = false
 	return root

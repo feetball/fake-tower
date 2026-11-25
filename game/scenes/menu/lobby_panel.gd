@@ -149,9 +149,9 @@ func _fill_addresses(host: bool, host_name: String) -> void:
 		_address_box.add_child(UiKit.label("Same network: use the address above. Over the internet the host must forward UDP port %d." % port, &"Small", true))
 	else:
 		var a := str(UiSettings.get_value("join_address", ""))
-		var l := UiKit.label(a if a != "" else host_name, &"MonoLarge")
-		_address_box.add_child(l)
-		_address_box.add_child(UiKit.label("Host: %s" % host_name, &"Small"))
+		_address_box.add_child(UiKit.label(a if a != "" else host_name, &"MonoLarge"))
+		if a != "":
+			_address_box.add_child(UiKit.label("Host: %s" % host_name, &"Small"))
 
 
 func _refresh_mic_and_round(host: bool, connected: int, need: int, host_name: String) -> void:

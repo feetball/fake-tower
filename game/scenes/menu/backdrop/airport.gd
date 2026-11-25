@@ -13,6 +13,9 @@ const FT := 0.3048
 @export var tower_position := Vector3(230.0, 0.0, -520.0)
 @export var with_apron := true
 @export var with_ground := true
+## Scales how strongly the airfield lights glow in volumetric fog (lower it for
+## views that fly through the light field).
+@export var fog_glow := 1.0
 
 var surface: RunwaySurface
 var runway_lights: RunwayLights
@@ -32,10 +35,12 @@ func _ready() -> void:
 	runway_lights.name = "RunwayLights"
 	runway_lights.length_m = length
 	runway_lights.extinction_per_m = sigma
+	runway_lights.fog_glow = fog_glow
 	add_child(runway_lights)
 	approach_lights = ApproachLights.new()
 	approach_lights.name = "ApproachLights"
 	approach_lights.extinction_per_m = sigma
+	approach_lights.fog_glow = fog_glow
 	add_child(approach_lights)
 	tower = ControlTower.new()
 	tower.name = "Tower"

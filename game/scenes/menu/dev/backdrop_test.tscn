@@ -1,9 +1,11 @@
-[gd_scene load_steps=3 format=3]
+[gd_scene load_steps=4 format=3]
 
 [ext_resource type="PackedScene" path="res://scenes/menu/backdrop/approach_backdrop.tscn" id="1"]
 [ext_resource type="Script" path="res://core/shot_helper.gd" id="2"]
+[ext_resource type="Script" path="res://scenes/menu/dev/backdrop_test.gd" id="3"]
 
 [node name="BackdropTest" type="Node"]
+script = ExtResource("3")
 
 [node name="Backdrop" parent="." instance=ExtResource("1")]
 

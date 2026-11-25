@@ -20,6 +20,8 @@ const FT := 0.3048
 ## One fog-lighting OmniLight every n centreline stations (0 = none).
 @export var omni_every := 2
 @export var omni_energy := 1.6
+## Scales how strongly the OmniLights light the volumetric fog.
+@export var fog_glow := 1.0
 
 const WHITE := Color(1.0, 0.93, 0.82)
 const RED := Color(1.0, 0.12, 0.06)
@@ -104,7 +106,7 @@ func _omni(pos: Vector3, col: Color, energy: float, rng: float) -> void:
 	l.light_energy = energy
 	l.omni_range = rng
 	l.omni_attenuation = 1.4
-	l.light_volumetric_fog_energy = 40.0
+	l.light_volumetric_fog_energy = 40.0 * fog_glow
 	l.shadow_enabled = false
 	add_child(l)
 

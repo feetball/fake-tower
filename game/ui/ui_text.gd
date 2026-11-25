@@ -81,9 +81,11 @@ static func role_line() -> Dictionary:
 	match Sess.my_role():
 		"pilot":
 			var ctl := controller_names()
-			var names := " and ".join(ctl) if ctl.size() > 0 else "—"
+			if ctl.is_empty():
+				return {"text": "%s  ·  Practice flight — no controllers on frequency." % Sess.my_callsign(),
+					"kind": "pilot"}
 			return {"text": "%s  ·  Two controllers on frequency: %s. One is the impostor." % [
-				Sess.my_callsign(), names], "kind": "pilot"}
+				Sess.my_callsign(), " and ".join(ctl)], "kind": "pilot"}
 		"controller":
 			if Sess.i_am_impostor():
 				return {"text": "YOU ARE THE IMPOSTOR — the tower wins only if more than half the aircraft land.",

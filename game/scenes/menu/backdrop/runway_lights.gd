@@ -13,6 +13,8 @@ const FT := 0.3048
 @export var intensity := 3.5
 @export var extinction_per_m := 0.0025
 @export var with_omni_lights := true
+## Scales how strongly the OmniLights light the volumetric fog.
+@export var fog_glow := 1.0
 
 const WHITE := Color(1.0, 0.92, 0.78)
 const AMBER := Color(1.0, 0.62, 0.18)
@@ -32,6 +34,7 @@ func build() -> void:
 	var inset := _points("Centreline", Vector3(0.0, 0.25, 1.0), 1.5, 0.15)
 	var thr := _points("Threshold", Vector3(0.0, 0.1, 1.0), 2.0, 0.08)
 	var papi := _points("PAPI", Vector3(0.0, 0.05, 1.0), 6.0, 0.0)
+	papi.reflections = false
 	var half := width_m * 0.5 + 1.5
 	var amber_from := length_m - 2000.0 * FT
 	var z := 0.0
@@ -71,7 +74,7 @@ func build() -> void:
 	for lp: LightPoints in [edges, inset, thr, papi]:
 		lp.commit()
 	if with_omni_lights:
-		_omni(Vector3(0.0, 1.2, 1.5), GREEN, 1.4, 30.0)
+		_omni(Vector3(0.0, 1.2, 1.5), GREEN, 1.4, 30.0, 2.5)
 		for zz in [120.0, 360.0, 600.0, 900.0]:
 			for side in [-1.0, 1.0]:
 				_omni(Vector3(side * half, 1.0, -zz), WHITE, 0.8, 26.0)
@@ -85,17 +88,18 @@ func _points(n: String, dir: Vector3, power: float, bmin: float) -> LightPoints:
 	lp.beam_min = bmin
 	lp.extinction_per_m = extinction_per_m
 	lp.halo_size_m = 3.5
+	lp.reflections = true
 	add_child(lp)
 	return lp
 
 
-func _omni(pos: Vector3, col: Color, energy: float, rng: float) -> void:
+func _omni(pos: Vector3, col: Color, energy: float, rng: float, fog: float = 10.0) -> void:
 	var l := OmniLight3D.new()
 	l.position = pos
 	l.light_color = col
 	l.light_energy = energy
 	l.omni_range = rng
 	l.omni_attenuation = 1.3
-	l.light_volumetric_fog_energy = 10.0
+	l.light_volumetric_fog_energy = fog * fog_glow
 	l.shadow_enabled = false
 	add_child(l)
