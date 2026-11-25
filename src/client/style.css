@@ -1153,15 +1153,33 @@ h4 {
 }
 .plate-card {
   height: 100%;
-  aspect-ratio: auto;
+}
+.plate-scroll {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  justify-content: center;
 }
 .plate-canvas {
-  height: calc(100% - 30px);
+  height: 100%;
   aspect-ratio: 800 / 1100;
   max-width: 100%;
   display: block;
   background: #fbfaf4;
   border-radius: 2px;
+  cursor: zoom-in;
+}
+.plate-card.zoom {
+  width: min(1000px, 98%);
+}
+.plate-card.zoom .plate-scroll {
+  overflow-y: auto;
+  display: block;
+}
+.plate-card.zoom .plate-canvas {
+  width: 100%;
+  height: auto;
+  cursor: zoom-out;
 }
 
 /* ------------------------------------------------------------------ end screen */

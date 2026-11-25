@@ -205,7 +205,7 @@ export function drawPlate(ctx: CanvasRenderingContext2D, world: WorldDef, qnh: n
   }
 
   // ------------------------------------------------------------ plan view
-  const pv = { x: M, y: 218, w: W - 2 * M, h: 470 };
+  const pv = { x: M, y: 218, w: W - 2 * M, h: 530 };
   box(ctx, pv.x, pv.y, pv.w, pv.h);
   {
     const xs: number[] = [];
@@ -308,20 +308,26 @@ export function drawPlate(ctx: CanvasRenderingContext2D, world: WorldDef, qnh: n
       arrowHead(ctx, (x0 + xf) / 2, y0, Math.PI, 10);
       ctx.font = font(14, 'bold');
       ctx.textAlign = 'center';
-      ctx.fillText(`${hdgText(world.ils.courseDeg)}°`, (x0 + xf) / 2 + 30, y0 - 10);
-      // ident box
-      const bxw = 118;
-      const lx = xf - bxw - 6;
-      const ly = yf + 14;
+      ctx.fillText(`${hdgText(world.ils.courseDeg)}°`, P(far.x * 0.6, 0)[0], y0 + 22);
+      // ident box (bottom-right corner, with a leader to the localizer)
+      const bxw = 128;
+      const lx = pv.x + pv.w - bxw - 10;
+      const ly = pv.y + pv.h - 46;
+      ctx.strokeStyle = '#888';
+      ctx.lineWidth = 0.8;
+      ctx.beginPath();
+      ctx.moveTo(lx + 20, ly);
+      ctx.lineTo(xf - 20, yf + 4);
+      ctx.stroke();
       ctx.fillStyle = PAPER;
-      ctx.fillRect(lx, ly, bxw, 34);
-      box(ctx, lx, ly, bxw, 34);
+      ctx.fillRect(lx, ly, bxw, 36);
+      box(ctx, lx, ly, bxw, 36);
       ctx.fillStyle = INK;
       ctx.font = font(10);
       ctx.textAlign = 'left';
-      ctx.fillText('ILS/DME', lx + 5, ly + 13);
-      ctx.font = font(12, 'bold');
-      ctx.fillText(`${ILS_IDENT} ${ILS_FREQ}`, lx + 5, ly + 28);
+      ctx.fillText(`ILS/DME  ${hdgText(world.ils.courseDeg)}°`, lx + 6, ly + 13);
+      ctx.font = font(13, 'bold');
+      ctx.fillText(`${ILS_IDENT} ${ILS_FREQ}`, lx + 6, ly + 29);
     }
 
     // missed approach path (dashed): straight ahead, climbing right turn hdg 060, to hold fix
@@ -341,7 +347,7 @@ export function drawPlate(ctx: CanvasRenderingContext2D, world: WorldDef, qnh: n
         pts.push(pointAt(centre.x, centre.y, h - 90, r));
       }
       const last = pts[pts.length - 1]!;
-      const leg = pointAt(last.x, last.y, turnTo, 14);
+      const leg = pointAt(last.x, last.y, turnTo, 2.5);
       pts.push(leg);
       ctx.strokeStyle = INK;
       ctx.lineWidth = 1.5;
@@ -362,7 +368,7 @@ export function drawPlate(ctx: CanvasRenderingContext2D, world: WorldDef, qnh: n
       ctx.fillStyle = INK;
       ctx.font = font(10);
       ctx.textAlign = 'left';
-      ctx.fillText('MISSED APCH 060°', lx + 6, ly + 4);
+      ctx.fillText(`MISSED APCH ${hdgText(turnTo)}°`, lx - 30, ly - 8);
     }
 
     // hold
@@ -438,8 +444,8 @@ export function drawPlate(ctx: CanvasRenderingContext2D, world: WorldDef, qnh: n
       ctx.strokeRect(vx - 8, vy - 8, 16, 16);
       ctx.font = font(10, 'bold');
       ctx.fillStyle = INK;
-      ctx.textAlign = 'left';
-      ctx.fillText('FTW VOR/DME', vx + 12, vy + 4);
+      ctx.textAlign = 'right';
+      ctx.fillText('FTW VOR/DME', vx - 12, vy + 4);
       ctx.font = font(10);
       ctx.fillText(`${world.fieldElevFt}`, x1 - 10, y1 - 10);
     }
@@ -481,7 +487,7 @@ export function drawPlate(ctx: CanvasRenderingContext2D, world: WorldDef, qnh: n
   }
 
   // ------------------------------------------------------------ profile view
-  const pf = { x: M, y: 696, w: W - 2 * M, h: 210 };
+  const pf = { x: M, y: 756, w: W - 2 * M, h: 190 };
   box(ctx, pf.x, pf.y, pf.w, pf.h);
   {
     const ridge = world.fixes.find((f) => f.name === 'RIDGE');
@@ -609,14 +615,14 @@ export function drawPlate(ctx: CanvasRenderingContext2D, world: WorldDef, qnh: n
   }
 
   // ------------------------------------------------------------ minimums & tables
-  const my = 914;
-  box(ctx, M, my, W - 2 * M, 72);
+  const my = 952;
+  box(ctx, M, my, W - 2 * M, 66);
   {
     const col = (W - 2 * M) / 3;
     for (let i = 1; i < 3; i++) {
       ctx.beginPath();
       ctx.moveTo(M + i * col, my);
-      ctx.lineTo(M + i * col, my + 72);
+      ctx.lineTo(M + i * col, my + 66);
       ctx.stroke();
     }
     ctx.textAlign = 'left';
@@ -635,8 +641,8 @@ export function drawPlate(ctx: CanvasRenderingContext2D, world: WorldDef, qnh: n
     ctx.fillText('NOT AUTHORIZED', M + 2 * col + 8, my + 44);
   }
   // rate of descent table
-  const ry = my + 80;
-  box(ctx, M, ry, W - 2 * M, 54);
+  const ry = my + 72;
+  box(ctx, M, ry, W - 2 * M, 50);
   {
     const gsList = [120, 140, 160, 180];
     const tan = Math.tan(world.ils.glideDeg * D2R);

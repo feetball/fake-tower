@@ -741,7 +741,7 @@ export function createScope(): { el: HTMLElement; render: (s: State) => void } {
     if (atisKey !== lastAtis) {
       lastAtis = atisKey;
       setText(atisHead, `INFO ${r.atis.letter} · RWY ${r.atis.runway} · QNH ${r.atis.qnh} · ${String(r.atis.windDir).padStart(3, '0')}/${r.atis.windKt}KT`);
-      setText(atisBox, r.atis.text);
+      setText(atisBox, r.atis.text.replace(/\.\s+/g, '.\n'));
     }
     // strip
     const sel = s.selected ? s.radar?.targets.find((t) => t.callsign === s.selected) : undefined;

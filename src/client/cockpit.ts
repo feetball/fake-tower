@@ -7,7 +7,7 @@ import { chime, setSiren } from './alerts';
 import { fitCanvas, h, isTyping, setClass, setText, show } from './dom';
 import { angleDiff, D2R, hdgText, norm360 } from './geo';
 import { drawHsi, drawPfd, fmaFor, HSI_H, HSI_W, PFD_H, PFD_W } from './pfd';
-import { drawPlate, PLATE_H, PLATE_W } from './plate';
+import { drawPlate, PLATE_W } from './plate';
 import { state, type State } from './store';
 import { OUTCOME_TEXT } from './text';
 
@@ -187,7 +187,7 @@ export function createCockpit(actions: Actions): { el: HTMLElement; render: (s: 
         ['A', 'APP arm'],
         ['G', 'gear'],
         ['F / Shift+F', 'flaps down / up'],
-        ['I / P', 'ATIS / plate · Esc close'],
+        ['I / P', 'ATIS / plate (Z zoom) · Esc'],
       ] as const
     ).map(([k, d]) => h('div', { class: 'sc' }, h('kbd', {}, k), h('span', {}, d))),
   );
@@ -213,12 +213,19 @@ export function createCockpit(actions: Actions): { el: HTMLElement; render: (s: 
     { class: 'overlay', hidden: true },
     h('div', { class: 'overlay-card atis-card' }, h('div', { class: 'overlay-head' }, h('span', {}, 'ATIS'), h('button', { class: 'btn small close' }, 'Close (Esc)')), atisHead, atisPre),
   );
-  const plateCanvas = h('canvas', { class: 'plate-canvas' });
-  const plateOverlay = h(
+  const plateCanvas = h('canvas', { class: 'plate-canvas', title: 'Click to zoom (Z)' });
+  const plateCard = h(
     'div',
-    { class: 'overlay', hidden: true },
-    h('div', { class: 'overlay-card plate-card' }, h('div', { class: 'overlay-head' }, h('span', {}, 'Approach chart'), h('button', { class: 'btn small close' }, 'Close (Esc)')), plateCanvas),
+    { class: 'overlay-card plate-card' },
+    h('div', { class: 'overlay-head' }, h('span', {}, 'Approach chart · click or Z to zoom'), h('button', { class: 'btn small close' }, 'Close (Esc)')),
+    h('div', { class: 'plate-scroll' }, plateCanvas),
   );
+  const plateOverlay = h('div', { class: 'overlay', hidden: true }, plateCard);
+  const togglePlateZoom = () => {
+    plateCard.classList.toggle('zoom');
+    requestAnimationFrame(drawPlateNow);
+  };
+  plateCanvas.addEventListener('click', togglePlateZoom);
   for (const ov of [atisOverlay, plateOverlay]) {
     ov.addEventListener('click', (e) => {
       if (e.target === ov || (e.target as HTMLElement).classList.contains('close')) ov.hidden = true;
@@ -246,7 +253,6 @@ export function createCockpit(actions: Actions): { el: HTMLElement; render: (s: 
     drawPlate(c, r.world, null);
   };
   window.addEventListener('resize', () => requestAnimationFrame(drawPlateNow));
-  void PLATE_H;
 
   const main = h('div', { class: 'ck-main' }, h('div', { class: 'pfd-wrap' }, pfdCanvas), h('div', { class: 'hsi-wrap' }, hsiCanvas), side);
   const el = h('div', { id: 'cockpit', class: 'cockpit' }, mcp, main, waiting, statusOverlay, atisOverlay, plateOverlay);
@@ -275,6 +281,7 @@ export function createCockpit(actions: Actions): { el: HTMLElement; render: (s: 
       }
     } else if ((k === 'i' || k === 'I') && !e.repeat) openAtis();
     else if ((k === 'p' || k === 'P') && !e.repeat) openPlate();
+    else if ((k === 'z' || k === 'Z') && !e.repeat && !plateOverlay.hidden) togglePlateZoom();
     else if (k === 'Escape') {
       atisOverlay.hidden = true;
       plateOverlay.hidden = true;
@@ -405,7 +412,7 @@ export function createCockpit(actions: Actions): { el: HTMLElement; render: (s: 
     if (atisKey !== lastAtis) {
       lastAtis = atisKey;
       setText(atisHead, `${r.world.icao} INFORMATION ${r.atis.letter}`);
-      setText(atisPre, r.atis.text);
+      setText(atisPre, r.atis.text.replace(/\.\s+/g, '.\n'));
     }
     const ctl = r.players.filter((p) => p.role === 'controller').map((p) => p.name);
     setText(ctlLine, `Two controllers on frequency: ${ctl.join(' and ')}. One is the impostor.`);
