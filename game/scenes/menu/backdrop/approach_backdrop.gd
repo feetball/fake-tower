@@ -22,6 +22,10 @@ func _ready() -> void:
 	airport.visibility_m = env.visibility_m
 	add_child(airport)
 	add_child(_distant_lights(env.visibility_m))
+	var fog := FogBanks.new()
+	fog.name = "FogBanks"
+	fog.position = Vector3(0.0, 20.0, -400.0)
+	add_child(fog)
 	var cam := DriftCamera.new()
 	camera = cam
 	cam.name = "Camera"

@@ -102,7 +102,7 @@ static func _build() -> Theme:
 	_label_var(t, "Tagline", sans(300), 24, Color(0.78, 0.8, 0.82))
 	_label_var(t, "Heading", spaced(sans(600), 3), 14, DIM)
 	_label_var(t, "Dim", sans(400), 18, DIM)
-	_label_var(t, "Small", sans(400), 16, DIM)
+	_label_var(t, "Small", sans(400), 17, DIM)
 	_label_var(t, "Mono", mono(400), 18, TEXT)
 	_label_var(t, "MonoSmall", mono(400), 15, DIM)
 	_label_var(t, "MonoLarge", mono(500), 30, TEXT)
@@ -203,6 +203,10 @@ static func _build() -> Theme:
 	t.set_color("font_pressed_color", "CheckButton", TEXT)
 	t.set_color("font_hover_pressed_color", "CheckButton", Color.WHITE)
 	t.set_color("font_focus_color", "CheckButton", Color.WHITE)
+	t.set_icon("checked", "CheckButton", _switch(true))
+	t.set_icon("unchecked", "CheckButton", _switch(false))
+	t.set_icon("checked_disabled", "CheckButton", _switch(true))
+	t.set_icon("unchecked_disabled", "CheckButton", _switch(false))
 	for s in ["normal", "hover", "pressed", "hover_pressed"]:
 		t.set_stylebox(s, "CheckButton", flat(Color.TRANSPARENT, Color.TRANSPARENT, 0, 2, 0, 6))
 	t.set_stylebox("focus", "CheckButton", _focus_box())
@@ -250,4 +254,30 @@ static func _dot(size: int, col: Color) -> ImageTexture:
 			var d := Vector2(x - c, y - c).length()
 			var a := clampf(c - d + 0.5, 0.0, 1.0)
 			img.set_pixel(x, y, Color(col, a))
+	return ImageTexture.create_from_image(img)
+
+
+## On/off switch icon: a rounded track with a knob, drawn with 2x supersampling.
+static func _switch(on: bool) -> ImageTexture:
+	var w := 46
+	var h := 24
+	var ss := 2
+	var img := Image.create(w * ss, h * ss, false, Image.FORMAT_RGBA8)
+	var track := Color(ACCENT, 0.35) if on else Color(1, 1, 1, 0.12)
+	var border := Color(ACCENT, 0.9) if on else Color(1, 1, 1, 0.3)
+	var knob := Color(0.92, 1.0, 0.96) if on else Color(0.7, 0.73, 0.75)
+	var r := h * ss * 0.5
+	var knob_c := Vector2((w * ss - r) if on else r, r)
+	for y in h * ss:
+		for x in w * ss:
+			var p := Vector2(x + 0.5, y + 0.5)
+			var cx := clampf(p.x, r, w * ss - r)
+			var d := p.distance_to(Vector2(cx, r))
+			var c := Color(0, 0, 0, 0)
+			if d <= r:
+				c = border if d > r - 2.0 * ss else track
+			if p.distance_to(knob_c) <= r - 4.0 * ss:
+				c = knob
+			img.set_pixel(x, y, c)
+	img.resize(w, h, Image.INTERPOLATE_BILINEAR)
 	return ImageTexture.create_from_image(img)

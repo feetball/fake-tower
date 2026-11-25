@@ -42,7 +42,7 @@ var _radio_kind := ""
 func _ready() -> void:
 	add_to_group(&"radio_hud")
 	theme = UiTheme.get_theme()
-	set_anchors_preset(Control.PRESET_FULL_RECT)
+	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_build()
 	Sess.connect_signal(&"radio_changed", func(_tx: Array) -> void: _refresh_radio())
@@ -61,7 +61,7 @@ func get_reserved_top_px() -> float:
 func _build() -> void:
 	_strip = PanelContainer.new()
 	_strip.theme_type_variation = &"Strip"
-	_strip.set_anchors_preset(Control.PRESET_TOP_WIDE)
+	_strip.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
 	_strip.custom_minimum_size = Vector2(0.0, STRIP_H)
 	_strip.mouse_filter = Control.MOUSE_FILTER_STOP
 	add_child(_strip)

@@ -8,13 +8,13 @@ var role := ""
 
 func _ready() -> void:
 	theme = UiTheme.get_theme()
-	set_anchors_preset(Control.PRESET_FULL_RECT)
+	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	var bg := ColorRect.new()
 	bg.color = Color(0.012, 0.014, 0.018)
-	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
+	bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	add_child(bg)
 	var center := CenterContainer.new()
-	center.set_anchors_preset(Control.PRESET_FULL_RECT)
+	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	add_child(center)
 	var what := "Pilot view" if role == "pilot" else ("Controller view" if role == "controller" else "View")
 	var box := UiKit.vbox(8, [UiKit.label("%s not available" % what, &"Big"),

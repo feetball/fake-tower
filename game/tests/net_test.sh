@@ -32,7 +32,6 @@ check "both controllers got radar" "[ $(n 'role=controller impostor=[a-z]* got_r
 check "ap command reflected for both pilots" "[ $(cat "$LOGS"/*.log | grep -c 'NETTEST ap_ok=true') -eq 2 ]"
 check "no script errors" "! cat \"$LOGS\"/*.log | grep -q 'SCRIPT ERROR'"
 check "no timeouts" "! cat \"$LOGS\"/*.log | grep -q 'NETTEST timeout'"
-pass=$(( fail == 0 ))
 echo "NET SUMMARY: $([ $fail -eq 0 ] && echo 'all checks passed' || echo "failures (logs in $LOGS)")"
 [ $fail -eq 0 ] && rm -rf "$LOGS"
 exit $fail

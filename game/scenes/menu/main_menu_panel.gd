@@ -17,7 +17,7 @@ var _items: Array[Button] = []
 
 
 func _ready() -> void:
-	set_anchors_preset(Control.PRESET_FULL_RECT)
+	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var col := UiKit.vbox(0)
 	col.position = Vector2(150.0, 0.0)

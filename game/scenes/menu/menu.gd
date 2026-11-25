@@ -84,7 +84,7 @@ func _fade_in(c: CanvasItem) -> void:
 func _build_how_to_play() -> Control:
 	var root := Control.new()
 	root.name = "HowToPlay"
-	root.set_anchors_preset(Control.PRESET_FULL_RECT)
+	root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var body := UiKit.vbox(20)
 	var head := UiKit.hbox(12, [UiKit.label("How to play", &"Big"), UiKit.spacer(0.0, true),
