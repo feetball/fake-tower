@@ -77,6 +77,8 @@ export interface IlsDeviation {
 const LOC_DEG_PER_DOT = 1;
 const GS_DEG_PER_DOT = 0.35;
 const FULL_SCALE = 2.5;
+/** Inside this distance from the threshold the ±35° coverage cone is not applied. */
+export const ILS_NEAR_NM = 0.5;
 
 /** ILS needles for an aircraft at (x, y, alt). Antennas are modelled at the threshold. */
 export function ilsDeviation(world: WorldDef, x: number, y: number, alt: number): IlsDeviation {
@@ -84,8 +86,13 @@ export function ilsDeviation(world: WorldDef, x: number, y: number, alt: number)
   const backCourse = norm360(world.ils.courseDeg + 180); // bearing from threshold out along the final
   const brg = bearing(0, 0, x, y);
   const off = angleDiff(backCourse, brg); // >0: clockwise of the final approach course from the field
-  // Behind the threshold = more than 90° off the back course.
-  if (d > world.ils.rangeNm || d < 1e-6 || Math.abs(off) > 35) return { loc: null, gs: null };
+  // Coverage: ±35° of the course out to the range. The antennas are modelled at the
+  // threshold, but a real localizer sits past the far end, so close in (where a few
+  // feet of lateral error is a large angle) only "behind the threshold" (> 90° off
+  // the back course) loses the signal. Without this, an aircraft established a few
+  // dozen feet off the centreline lost LOC in the last step and went missed.
+  if (d > world.ils.rangeNm || d < 1e-6 || Math.abs(off) > 90) return { loc: null, gs: null };
+  if (Math.abs(off) > 35 && d > ILS_NEAR_NM) return { loc: null, gs: null };
   // Course 270, aircraft south of the centreline (bearing > 090): centreline is to the right.
   const loc = clamp(off / LOC_DEG_PER_DOT, -FULL_SCALE, FULL_SCALE);
   const angle = Math.atan2(alt - world.fieldElevFt - world.ils.tchFt, d * FT_PER_NM) / DEG;
