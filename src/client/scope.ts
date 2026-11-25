@@ -439,13 +439,13 @@ export function createScope(): { el: HTMLElement; render: (s: State) => void } {
         ctx.setLineDash([]);
         const fix = world.fixes.find((f) => f.name === world.hold.fix);
         if (fix) {
-          const lp = pointAt(fix.x, fix.y, world.hold.inboundCourseDeg + 180, 2.2);
+          const lp = pointAt(fix.x, fix.y, world.hold.inboundCourseDeg + 180, 4.4);
           const [x, y] = toS(lp.x, lp.y);
           ctx.fillStyle = C.hold;
           ctx.font = font(10);
           ctx.textAlign = 'left';
-          ctx.textBaseline = 'top';
-          ctx.fillText(`HOLD ${hdgText(world.hold.inboundCourseDeg)}° ${world.hold.turn} ${world.hold.minAltFt}+`, x + 6, y + 6);
+          ctx.textBaseline = 'bottom';
+          ctx.fillText(`HOLD ${hdgText(world.hold.inboundCourseDeg)}°${world.hold.turn} ${world.hold.minAltFt}+`, x + 4, y - 2);
         }
       }
     }
