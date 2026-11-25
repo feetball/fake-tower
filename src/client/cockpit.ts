@@ -7,7 +7,7 @@ import { chime, setSiren } from './alerts';
 import { fitCanvas, h, isTyping, setClass, setText, show } from './dom';
 import { angleDiff, D2R, hdgText, norm360 } from './geo';
 import { drawHsi, drawPfd, fmaFor, HSI_H, HSI_W, PFD_H, PFD_W } from './pfd';
-import { drawPlate, PLATE_W } from './plate';
+import { drawPlate, PLATE_H, PLATE_W } from './plate';
 import { state, type State } from './store';
 import { OUTCOME_TEXT } from './text';
 
@@ -245,11 +245,16 @@ export function createCockpit(actions: Actions): { el: HTMLElement; render: (s: 
   const drawPlateNow = () => {
     const r = state.round;
     if (!r || plateOverlay.hidden) return;
-    const { w, dpr } = fitCanvas(plateCanvas);
-    const s = (w / PLATE_W) * dpr;
+    const { w, h: hh, dpr } = fitCanvas(plateCanvas);
     const c = plateCanvas.getContext('2d');
     if (!c) return;
-    c.setTransform(s, 0, 0, s, 0, 0);
+    // keep the chart's aspect even if the CSS box does not
+    const k = Math.min(w / PLATE_W, hh / PLATE_H);
+    const ox = (w - PLATE_W * k) / 2;
+    const oy = (hh - PLATE_H * k) / 2;
+    c.setTransform(dpr, 0, 0, dpr, 0, 0);
+    c.clearRect(0, 0, w, hh);
+    c.setTransform(k * dpr, 0, 0, k * dpr, ox * dpr, oy * dpr);
     drawPlate(c, r.world, null);
   };
   window.addEventListener('resize', () => requestAnimationFrame(drawPlateNow));

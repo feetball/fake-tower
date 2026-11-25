@@ -17,7 +17,11 @@ export function radioLabel(s: State): { text: string; cls: 'idle' | 'rx' | 'tx' 
     const tag = rp?.role === 'pilot' && rp.callsign ? `${rp.callsign} · ${nm}` : rp?.role === 'controller' ? `${nm} · CTL` : nm;
     return { text: `RX ${tag}`, cls: 'rx' };
   }
-  if (s.localPtt) return { text: 'TX', cls: 'tx' };
+  if (s.localPtt) {
+    // Keyed locally but the server has not (or will not) put us on the air.
+    if (s.own?.ac.status === 'crashed') return { text: 'RADIO DEAD', cls: 'idle' };
+    return { text: 'TX', cls: 'tx' };
+  }
   return { text: 'IDLE', cls: 'idle' };
 }
 

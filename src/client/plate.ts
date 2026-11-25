@@ -389,11 +389,14 @@ export function drawPlate(ctx: CanvasRenderingContext2D, world: WorldDef, qnh: n
         const [x1, y1] = P(hf.x, hf.y);
         ctx.fillStyle = INK;
         arrowHead(ctx, (x0 + x1) / 2, (y0 + y1) / 2, Math.atan2(y1 - y0, x1 - x0), 9);
+        // label on the non-holding side of the inbound leg
+        const mid = pointAt(hf.x, hf.y, world.hold.inboundCourseDeg + 180, 5.6);
+        const [lx, ly] = P(mid.x, mid.y);
         ctx.font = font(11, 'bold');
         ctx.textAlign = 'center';
-        ctx.fillText(`${hdgText(world.hold.inboundCourseDeg)}°`, (x0 + x1) / 2 - 18, (y0 + y1) / 2 + 18);
+        ctx.fillText(`${hdgText(world.hold.inboundCourseDeg)}°`, lx, ly);
         ctx.font = font(10);
-        ctx.fillText(`MHA ${world.hold.minAltFt}`, (x0 + x1) / 2 - 18, (y0 + y1) / 2 + 31);
+        ctx.fillText(`MHA ${world.hold.minAltFt}`, lx, ly + 12);
       }
     }
 
@@ -407,13 +410,13 @@ export function drawPlate(ctx: CanvasRenderingContext2D, world: WorldDef, qnh: n
       ctx.font = font(12, 'bold');
       ctx.textAlign = 'left';
       const d = Math.hypot(f.x, f.y);
+      const onCl = Math.abs(f.y) < 0.5;
       const lx = x + 9;
-      const ly = faf ? y - 24 : y - 4;
+      const ly = onCl ? y - (faf ? 42 : 30) : y - 4;
       ctx.fillText(f.name, lx, ly);
       ctx.font = font(10);
       ctx.fillText(`D${d.toFixed(1)} ${ILS_IDENT}`, lx, ly + 13);
-      if (f.name === world.hold.fix) ctx.fillText(`${world.hold.minAltFt}`, lx, ly + 25);
-      else if (faf) ctx.fillText(`${world.ils.platformAltFt}  FAF`, lx, ly + 25);
+      if (faf) ctx.fillText(`${world.ils.platformAltFt}  FAF`, lx, ly + 25);
     }
 
     // runway + VOR/DME
