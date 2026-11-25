@@ -14,9 +14,11 @@ const SHADER: Shader = preload("res://shaders/light_point.gdshader")
 @export var beam_min := 0.05
 ## Atmospheric extinction applied to the lamps (≈ 3 / visibility in metres).
 @export var extinction_per_m := 0.0025
-@export var halo_size_m := 9.0
-@export var halo_gain := 0.18
+@export var halo_size_m := 3.0
+@export var halo_gain := 0.08
 @export var intensity_scale := 1.0
+## Minimum apparent halo size (radians) so distant lights keep a soft glow.
+@export var min_halo_angle := 0.03
 
 var _pos: PackedVector3Array = []
 var _col: PackedColorArray = []
@@ -76,3 +78,4 @@ func apply_uniforms() -> void:
 	_material.set_shader_parameter(&"halo_size_m", halo_size_m)
 	_material.set_shader_parameter(&"halo_gain", halo_gain)
 	_material.set_shader_parameter(&"intensity_scale", intensity_scale)
+	_material.set_shader_parameter(&"min_halo_angle", min_halo_angle)

@@ -1,5 +1,6 @@
 import type { Actions } from './actions';
 import { h, setText, show } from './dom';
+import { endSummary } from './format';
 import { isHost, playerName, type State } from './store';
 import { eventText, mmss, OUTCOME_TEXT } from './text';
 
@@ -30,16 +31,10 @@ export function createEnd(actions: Actions): { el: HTMLElement; render: (s: Stat
     const nextSig = JSON.stringify(r) + s.events.length + s.selfId;
     if (nextSig === sig) return;
     sig = nextSig;
-    const towerWon = r.winner === 'tower';
-    const landed = r.outcomes.filter((o) => o.outcome === 'landed').length;
-    setText(banner, towerWon ? 'THE TOWER WINS' : 'THE IMPOSTOR WINS');
+    const { towerWon, banner: bannerText, sub: subText, youWon } = endSummary(r, s.selfId);
+    setText(banner, bannerText);
     banner.className = `end-banner ${towerWon ? 'tower' : 'impostor'}`;
-    setText(
-      sub,
-      `${landed} of ${r.outcomes.length} aircraft landed${towerWon ? ' — more than half made it down.' : ' — not more than half made it down.'}  Round time ${mmss(r.durationSec)}.`,
-    );
-    const youWon =
-      (towerWon && s.selfId !== r.impostorId) || (!towerWon && s.selfId === r.impostorId);
+    setText(sub, subText);
     reveal.replaceChildren(
       h('div', { class: 'rev real' }, h('div', { class: 'rev-label' }, 'Real tower'), h('div', { class: 'rev-name' }, playerName(r.realControllerId))),
       h('div', { class: 'rev imp' }, h('div', { class: 'rev-label' }, 'Impostor'), h('div', { class: 'rev-name' }, playerName(r.impostorId))),

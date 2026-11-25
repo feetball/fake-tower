@@ -6,7 +6,7 @@ extends WorldEnvironment
 ## (heavily darkened — it only needs to give the cloud deck some shape).
 
 ## Meteorological visibility in metres; drives fog density.
-@export var visibility_m := 900.0
+@export var visibility_m := 1400.0
 @export var exposure := 1.0
 @export var use_hdri := true
 @export var ssr := true
@@ -24,11 +24,11 @@ static func extinction_for(visibility: float) -> float:
 static func make(visibility: float, exp_mult: float = 1.0, hdri: bool = true, with_ssr: bool = true) -> Environment:
 	var env := Environment.new()
 	var sky := Sky.new()
-	var hdr_path := AssetLookup.find_path(["night", "overcast", "cloud", "dusk"], ["hdr", "exr", "2k", "1k", "4k"]) if hdri else ""
+	var hdr_path := AssetLookup.find_path(["night_overcast_fog", "night"], [".hdr", ".exr"]) if hdri else ""
 	if hdr_path != "":
 		var pano := PanoramaSkyMaterial.new()
 		pano.panorama = load(hdr_path) as Texture2D
-		pano.energy_multiplier = 0.02
+		pano.energy_multiplier = 0.25
 		sky.sky_material = pano
 	else:
 		var proc := ProceduralSkyMaterial.new()
@@ -43,7 +43,7 @@ static func make(visibility: float, exp_mult: float = 1.0, hdri: bool = true, wi
 	env.background_mode = Environment.BG_SKY
 	env.sky = sky
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
-	env.ambient_light_energy = 0.6
+	env.ambient_light_energy = 1.5
 	env.reflected_light_source = Environment.REFLECTION_SOURCE_SKY
 
 	env.tonemap_mode = Environment.TONE_MAPPER_ACES
@@ -54,7 +54,7 @@ static func make(visibility: float, exp_mult: float = 1.0, hdri: bool = true, wi
 	env.glow_normalized = true
 	env.glow_intensity = 0.9
 	env.glow_strength = 1.0
-	env.glow_bloom = 0.02
+	env.glow_bloom = 0.06
 	env.glow_hdr_threshold = 0.9
 	env.glow_hdr_scale = 2.0
 	env.glow_blend_mode = Environment.GLOW_BLEND_MODE_SOFTLIGHT
@@ -64,27 +64,28 @@ static func make(visibility: float, exp_mult: float = 1.0, hdri: bool = true, wi
 	env.set_glow_level(2, 1.0)
 	env.set_glow_level(3, 1.0)
 	env.set_glow_level(4, 0.8)
-	env.set_glow_level(5, 0.6)
+	env.set_glow_level(5, 0.8)
+	env.set_glow_level(6, 0.5)
 
 	var sigma := extinction_for(visibility)
 	env.fog_enabled = true
 	env.fog_mode = Environment.FOG_MODE_EXPONENTIAL
-	env.fog_light_color = Color(0.025, 0.027, 0.032)
+	env.fog_light_color = Color(0.05, 0.055, 0.065)
 	env.fog_light_energy = 1.0
-	env.fog_density = sigma * 0.55
-	env.fog_sky_affect = 0.9
+	env.fog_density = sigma * 0.4
+	env.fog_sky_affect = 1.0
 	env.fog_aerial_perspective = 0.0
 
 	env.volumetric_fog_enabled = true
-	env.volumetric_fog_density = sigma * 0.5
+	env.volumetric_fog_density = sigma * 10.0
 	env.volumetric_fog_albedo = Color(0.85, 0.87, 0.9)
-	env.volumetric_fog_emission = Color(0.0, 0.0, 0.0)
+	env.volumetric_fog_emission = Color(0.045, 0.048, 0.06)
 	env.volumetric_fog_anisotropy = 0.55
-	env.volumetric_fog_length = 900.0
+	env.volumetric_fog_length = 1400.0
 	env.volumetric_fog_detail_spread = 2.0
 	env.volumetric_fog_gi_inject = 0.0
 	env.volumetric_fog_ambient_inject = 0.15
-	env.volumetric_fog_sky_affect = 0.0
+	env.volumetric_fog_sky_affect = 1.0
 	env.volumetric_fog_temporal_reprojection_enabled = true
 
 	env.ssr_enabled = with_ssr

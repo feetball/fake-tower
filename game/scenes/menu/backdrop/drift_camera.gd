@@ -4,18 +4,19 @@ extends Camera3D
 ## at a (also drifting) target. Incommensurate sine periods keep it from
 ## visibly looping.
 
-@export var base_position := Vector3(-34.0, 8.0, 330.0)
-@export var look_target := Vector3(30.0, 0.0, -420.0)
-@export var position_amp := Vector3(10.0, 2.5, 45.0)
-@export var target_amp := Vector3(40.0, 4.0, 60.0)
+@export var base_position := Vector3(-24.0, 19.0, 390.0)
+@export var look_target := Vector3(-40.0, 8.0, -300.0)
+@export var position_amp := Vector3(10.0, 4.0, 60.0)
+@export var target_amp := Vector3(30.0, 4.0, 60.0)
 @export var speed := 1.0
+@export var start_time := 40.0
 @export var roll_amp_deg := 0.6
 
 var _t := 0.0
 
 
 func _ready() -> void:
-	_t = randf() * 200.0
+	_t = start_time
 	_apply()
 
 
@@ -35,3 +36,10 @@ func _apply() -> void:
 		sin(_t * 0.029 + 1.5) * target_amp.z)
 	look_at_from_position(p, target, Vector3.UP)
 	rotate_object_local(Vector3.FORWARD, deg_to_rad(sin(_t * 0.11) * roll_amp_deg))
+
+
+## Smoothly re-frame the shot (e.g. when the menu switches to the lobby).
+func glide_to(new_base: Vector3, new_target: Vector3, seconds: float = 3.0) -> void:
+	var tw := create_tween().set_parallel().set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	tw.tween_property(self, "base_position", new_base, seconds)
+	tw.tween_property(self, "look_target", new_target, seconds)

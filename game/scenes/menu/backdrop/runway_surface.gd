@@ -41,39 +41,33 @@ func _add_plane(n: String, size: Vector2, pos: Vector3, mat: Material) -> MeshIn
 
 
 func _asphalt_material() -> StandardMaterial3D:
-	var m := StandardMaterial3D.new()
-	var tex_albedo := AssetLookup.find_texture(["asphalt", "road"], ["diff", "albedo", "color", "col"])
-	var tex_normal := AssetLookup.find_texture(["asphalt", "road"], ["nor_gl", "normal_gl", "normal", "nor"])
-	var tex_rough := AssetLookup.find_texture(["asphalt", "road"], ["rough"])
-	m.albedo_color = Color(0.055, 0.055, 0.058)
-	if tex_albedo:
-		m.albedo_texture = tex_albedo
-		m.albedo_color = Color(0.42, 0.42, 0.44)
-	m.uv1_scale = Vector3(width_m / 8.0, length_m / 8.0, 1.0)
-	# Wet: puddle-like roughness variation from noise (or the texture), strong specular.
-	m.roughness = lerpf(0.6, 0.18, wetness)
-	if tex_rough:
-		m.roughness_texture = tex_rough
-		m.roughness = lerpf(1.0, 0.35, wetness)
+	var size := Vector2(width_m + 7.0, length_m + 60.0)
+	var m := AssetLookup.pbr_material("asphalt_runway", size, 3.0)
+	if m:
+		m.albedo_color = Color(0.32, 0.32, 0.33)
+		# Wet: the texture's roughness scaled well down, plus a stronger normal.
+		m.roughness = lerpf(1.0, 0.3, wetness)
+		m.normal_scale = 0.6
 	else:
+		m = StandardMaterial3D.new()
+		m.albedo_color = Color(0.055, 0.055, 0.058)
+		m.roughness = lerpf(0.6, 0.18, wetness)
 		m.roughness_texture = _noise_tex(0.004, 512, false)
+		m.normal_enabled = true
+		m.normal_scale = 0.35
+		m.normal_texture = _noise_tex(0.05, 512, true)
 		m.uv1_scale = Vector3(1.0, length_m / 60.0, 1.0)
-	m.normal_enabled = true
-	m.normal_scale = 0.35
-	m.normal_texture = tex_normal if tex_normal else _noise_tex(0.05, 512, true)
-	m.specular_mode = BaseMaterial3D.SPECULAR_SCHLICK_GGX
 	return m
 
 
 func _grass_material() -> StandardMaterial3D:
-	var m := StandardMaterial3D.new()
-	var tex := AssetLookup.find_texture(["grass", "ground", "meadow"], ["diff", "albedo", "color", "col"])
-	m.albedo_color = Color(0.035, 0.042, 0.03)
-	if tex:
-		m.albedo_texture = tex
-		m.albedo_color = Color(0.3, 0.32, 0.28)
-		m.uv1_scale = Vector3(grass_size_m / 6.0, grass_size_m / 6.0, 1.0)
-	m.roughness = 0.92
+	var m := AssetLookup.pbr_material("grass_field", Vector2(grass_size_m, grass_size_m), 2.0)
+	if m:
+		m.albedo_color = Color(0.22, 0.24, 0.2)
+	else:
+		m = StandardMaterial3D.new()
+		m.albedo_color = Color(0.035, 0.042, 0.03)
+		m.roughness = 0.92
 	return m
 
 

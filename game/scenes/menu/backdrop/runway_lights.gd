@@ -84,7 +84,7 @@ func _points(n: String, dir: Vector3, power: float, bmin: float) -> LightPoints:
 	lp.beam_power = power
 	lp.beam_min = bmin
 	lp.extinction_per_m = extinction_per_m
-	lp.halo_size_m = 7.0
+	lp.halo_size_m = 3.5
 	add_child(lp)
 	return lp
 
@@ -96,6 +96,6 @@ func _omni(pos: Vector3, col: Color, energy: float, rng: float) -> void:
 	l.light_energy = energy
 	l.omni_range = rng
 	l.omni_attenuation = 1.3
-	l.light_volumetric_fog_energy = 2.0
+	l.light_volumetric_fog_energy = 10.0
 	l.shadow_enabled = false
 	add_child(l)

@@ -86,7 +86,7 @@ npm run build
 npm start
 ```
 
-`npm start` runs the game server, which serves `dist/client` itself. `PORT` sets the listen port (default 8080); `FT_MIN_PLAYERS` is honoured here too.
+`npm start` runs the game server, which serves `dist/client` itself. `PORT` sets the listen port (default 8080); `FT_MIN_PLAYERS` is honoured here too. `FT_TIME_SCALE=10` runs the simulation 10x faster (1-20; each tick runs that many fixed 0.1 s steps, so the physics are unchanged).
 
 ## Tests
 
@@ -95,7 +95,7 @@ npm start
 - `npm run typecheck`: `tsc --noEmit`.
 - `npm run lint` / `npm run lint:fix`: ESLint 9 (typescript-eslint, type-aware).
 - `npm run format:check` / `npm run format`: Prettier. Not yet enforced in CI.
-- `npm run e2e`: end-to-end smoke test. Builds the client, starts the server on a free port, and drives four headless Chromium windows through a complete round (lobby, roles, information hiding, push-to-talk and blocking, WebRTC connection check, crashing both aircraft, end screen, return to lobby). A real round takes about four minutes because the simulation runs in real time. It needs Playwright with Chromium installed globally; Playwright is not a dependency of this project. Screenshots are written to `e2e/screenshots/` (gitignored).
+- `npm run e2e`: runs four end-to-end scenarios (impostor-wins, tower-wins, lone-pilot, disconnect) in headless Chromium, each against its own server sped up with `FT_TIME_SCALE`, in about 2 minutes. `node e2e/smoke.mjs <name>` runs one, `--list` lists them. It needs Playwright with Chromium installed globally; Playwright is not a dependency of this project. Screenshots are written to `e2e/screenshots/` (gitignored), prefixed with the scenario name.
 
 ### Continuous integration
 

@@ -6,12 +6,18 @@ extends Node3D
 @export var rpm := 12.0
 @export var elevation_deg := 4.0
 @export var beam_range_m := 3500.0
-@export var beam_energy := 60.0
-@export var fog_energy := 3.0
+@export var beam_energy := 120.0
+## Volumetric-fog energy of the real SpotLights. Kept low: froxels are too coarse
+## for a 4° beam, the visible shaft is the additive cone.
+@export var fog_energy := 0.0
 @export var spot_angle_deg := 3.5
 @export var extinction_per_m := 0.0025
+@export var shaft_length_m := 900.0
+@export var shaft_intensity := 0.12
 
-const GREEN := Color(0.25, 1.0, 0.45)
+const BEAM_SHADER: Shader = preload("res://shaders/light_beam.gdshader")
+
+const GREEN := Color(0.35, 1.0, 0.6)
 const WHITE := Color(1.0, 0.95, 0.85)
 
 var _pivot: Node3D
@@ -30,6 +36,32 @@ func _process(delta: float) -> void:
 	_pivot.rotation.y = wrapf(_pivot.rotation.y + delta * rpm / 60.0 * TAU, 0.0, TAU)
 
 
+## Visible beam: a long additive cone pointing along the head's −Z.
+func _shaft(col: Color) -> MeshInstance3D:
+	var cone := CylinderMesh.new()
+	cone.height = shaft_length_m
+	cone.top_radius = 0.4
+	cone.bottom_radius = tan(deg_to_rad(spot_angle_deg)) * shaft_length_m
+	cone.radial_segments = 24
+	cone.rings = 8
+	cone.cap_top = false
+	cone.cap_bottom = false
+	var mat := ShaderMaterial.new()
+	mat.shader = BEAM_SHADER
+	mat.set_shader_parameter(&"beam_color", col)
+	mat.set_shader_parameter(&"intensity", shaft_intensity)
+	mat.set_shader_parameter(&"length_m", shaft_length_m)
+	mat.set_shader_parameter(&"extinction_per_m", extinction_per_m * 0.5)
+	var mi := MeshInstance3D.new()
+	mi.name = "Shaft"
+	mi.mesh = cone
+	mi.material_override = mat
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	mi.rotation.x = PI * 0.5
+	mi.position.z = -shaft_length_m * 0.5
+	return mi
+
+
 func _beam(col: Color, yaw: float) -> void:
 	var head := Node3D.new()
 	head.rotation = Vector3(deg_to_rad(elevation_deg), yaw, 0.0)
@@ -45,6 +77,7 @@ func _beam(col: Color, yaw: float) -> void:
 	spot.light_specular = 0.2
 	spot.shadow_enabled = false
 	head.add_child(spot)
+	head.add_child(_shaft(col))
 	# The lamp itself: blinding when the beam faces you, a faint glow otherwise.
 	var lamp := LightPoints.new()
 	lamp.beam_dir = Vector3(0.0, 0.0, -1.0)

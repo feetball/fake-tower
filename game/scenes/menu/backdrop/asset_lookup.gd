@@ -26,6 +26,34 @@ static func find_texture(subjects: Array, maps: Array) -> Texture2D:
 	return load(p) as Texture2D
 
 
+## StandardMaterial3D from a texture set laid out as
+## res://assets/textures/<set>/<set>_{albedo,normal_gl,arm}_2k.jpg (ARM = AO,
+## roughness, metallic), tiled every `tile_m` metres on a mesh `size_m` big.
+## Returns null when the set is not installed.
+static func pbr_material(set_name: String, size_m: Vector2, tile_m: float) -> StandardMaterial3D:
+	var base := ROOT.path_join("textures").path_join(set_name).path_join(set_name)
+	var albedo_path := base + "_albedo_2k.jpg"
+	if not ResourceLoader.exists(albedo_path):
+		return null
+	var m := StandardMaterial3D.new()
+	m.albedo_texture = load(albedo_path) as Texture2D
+	var normal_path := base + "_normal_gl_2k.jpg"
+	if ResourceLoader.exists(normal_path):
+		m.normal_enabled = true
+		m.normal_texture = load(normal_path) as Texture2D
+	var arm_path := base + "_arm_2k.jpg"
+	if ResourceLoader.exists(arm_path):
+		var arm := load(arm_path) as Texture2D
+		m.roughness_texture = arm
+		m.roughness_texture_channel = BaseMaterial3D.TEXTURE_CHANNEL_GREEN
+		m.ao_enabled = true
+		m.ao_texture = arm
+		m.ao_texture_channel = BaseMaterial3D.TEXTURE_CHANNEL_RED
+	m.uv1_scale = Vector3(size_m.x / tile_m, size_m.y / tile_m, 1.0)
+	m.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
+	return m
+
+
 static func find_path(subjects: Array, maps: Array) -> String:
 	for subject: String in subjects:
 		for map: String in maps:

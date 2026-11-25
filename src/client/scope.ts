@@ -4,6 +4,7 @@
 import type { RadarTarget } from '../shared/protocol';
 import type { WorldDef } from '../shared/world';
 import { fitCanvas, h, MONO, setText, show, storageGet, storageSet, isTyping } from './dom';
+import { alertTag, dataBlock, stripAltText, stripStatus, trafficAltText } from './format';
 import { bearingTo, D2R, hdgText, holdPath, msaAt, pointAt } from './geo';
 import { roundTime, state, update, type State } from './store';
 import { mmss, PHRASEOLOGY } from './text';
@@ -521,7 +522,7 @@ export function createScope(): { el: HTMLElement; render: (s: State) => void } {
         continue;
       }
       const selected = s.selected === t.callsign;
-      const alert = t.conflict ? 'CA' : t.msaw ? 'LA' : null;
+      const alert = alertTag(t);
       const alertCol = t.conflict ? C.ca : C.la;
       const col = alert && flashOn ? alertCol : selected ? C.sel : C.block;
 
@@ -549,15 +550,7 @@ export function createScope(): { el: HTMLElement; render: (s: State) => void } {
       }
 
       // data block
-      const altHund = String(Math.max(0, Math.round(t.alt / 100))).padStart(3, '0');
-      const trend = t.vsTrend > 0 ? '↑' : t.vsTrend < 0 ? '↓' : ' ';
-      const gsTens = String(Math.max(0, Math.round(t.gs / 10))).padStart(2, '0');
-      const lines: { text: string; color: string }[] = [];
-      if (alert) lines.push({ text: alert, color: alertCol });
-      lines.push({ text: t.callsign, color: col });
-      lines.push({ text: `${altHund}${trend} ${gsTens}`, color: col });
-      const sp = (s.scratch[t.callsign] ?? '').trim().toUpperCase().slice(0, 7);
-      if (sp) lines.push({ text: sp, color: col });
+      const lines = dataBlock(t, s.scratch[t.callsign]).lines.map((text, i) => ({ text, color: alert && i === 0 ? alertCol : col }));
 
       const dir = leader.get(t.callsign) ?? 45;
       const L = 26;
@@ -756,15 +749,15 @@ export function createScope(): { el: HTMLElement; render: (s: State) => void } {
       setText(stripFields.cs, s.selected);
       setText(stripFields.pilot, pilot ? pilot.name : '');
       if (sel) {
-        setText(stripFields.alt, `${Math.round(sel.alt)} ft ${sel.vsTrend > 0 ? '↑' : sel.vsTrend < 0 ? '↓' : '='}`);
+        setText(stripFields.alt, stripAltText(sel));
         setText(stripFields.gs, `${Math.round(sel.gs)} kt`);
         setText(stripFields.trk, `${hdgText(sel.track)}°`);
         setText(stripFields.dme, `${Math.hypot(sel.x, sel.y).toFixed(1)} nm`);
         const msa = msaAt(r.world, sel.x, sel.y);
         setText(stripFields.msa, msa === null ? '—' : String(msa));
-        const st = sel.status !== 'flying' ? sel.status.toUpperCase() : sel.conflict ? 'CA' : sel.msaw ? 'LA' : '';
-        setText(stripFields.status, st);
-        stripFields.status.className = `strip-status ${sel.conflict ? 'ca' : sel.msaw ? 'la' : sel.status}`;
+        const st = stripStatus(sel);
+        setText(stripFields.status, st.text);
+        stripFields.status.className = st.cls;
       } else {
         setText(stripFields.alt, '—');
         setText(stripFields.gs, '—');
@@ -788,9 +781,9 @@ export function createScope(): { el: HTMLElement; render: (s: State) => void } {
             'button',
             { class: `traffic-row ${t.callsign === s.selected ? 'sel' : ''} ${t.status} ${t.conflict ? 'ca' : t.msaw ? 'la' : ''}` },
             h('span', { class: 'tr-cs' }, t.callsign),
-            h('span', { class: 'tr-alt' }, t.status === 'flying' ? String(Math.round(t.alt / 100)).padStart(3, '0') : t.status.toUpperCase()),
+            h('span', { class: 'tr-alt' }, trafficAltText(t)),
             h('span', { class: 'tr-gs' }, t.status === 'flying' ? `${Math.round(t.gs)}kt` : ''),
-            h('span', { class: 'tr-flag' }, t.conflict ? 'CA' : t.msaw ? 'LA' : ''),
+            h('span', { class: 'tr-flag' }, alertTag(t) ?? ''),
           );
           row.addEventListener('click', () =>
             update((st) => {

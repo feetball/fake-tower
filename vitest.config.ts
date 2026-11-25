@@ -31,7 +31,7 @@ export default defineConfig({
         'src/server/main.ts',
       ],
       // Floors set just below measured values (82.7 stmts/lines, 87.8 branches, 97.4 funcs).
-      thresholds: { statements: 80, lines: 80, branches: 85, functions: 95 },
+      thresholds: { statements: 95, lines: 95, branches: 90, functions: 97 },
     },
   },
 });

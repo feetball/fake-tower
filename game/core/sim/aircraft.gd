@@ -2,7 +2,7 @@ extends RefCounted
 ## One aircraft: kinematic state, autopilot, altimetry, ILS, fuel and GPWS.
 ## Port of src/shared/sim/aircraft.ts. Pure and deterministic: advances only via step(dt).
 ## Additions for the 3D view (not in the TS version): attitude (pitch/bank) and a
-## kinematic flare/touchdown/rollout after a successful landing (see attitude.gd).
+## kinematic flare/touchdown/rollout after a successful landing (animate_landed).
 
 const Geo := preload("res://core/sim/geo.gd")
 const SimWorld := preload("res://core/sim/sim_world.gd")
@@ -30,6 +30,13 @@ const RADALT_MAX := 2500.0
 const LOC_GAIN_DEG_PER_NM := 80.0
 const LOC_MAX_CUT_DEG := 30.0
 const GS_GAIN_FPM_PER_FT := 6.0
+# Landing animation (view only).
+const FLARE_FT := 30.0
+const FLARE_SINK_PER_FT := 24.0 ## fpm of sink per ft above the runway during the flare
+const TOUCHDOWN_FPM := 100.0
+const FLARE_DECEL_KT_S := 1.0
+const ROLLOUT_DECEL_KT_S := 3.0
+const STOP_MARGIN_NM := 0.15
 
 ## Keys accepted in an init Dictionary (AircraftInit in the TS version).
 const INIT_KEYS: Array[String] = [
@@ -84,7 +91,7 @@ func _init(init: Dictionary, qnh: int) -> void:
 	else:
 		sel_alt = int(Geo.js_round(indicated_alt(qnh) / 100.0)) * 100
 	sel_spd = clampi(int(Geo.js_round(ias)), MIN_SPD[flaps], MAX_SPD)
-	att.reset(self)
+	att.reset(tas(), vs, ias, flaps)
 
 
 func is_flying() -> bool:
@@ -111,17 +118,18 @@ func apply(cmd: Dictionary) -> void:
 	if not is_flying():
 		return
 	if cmd.has("flaps"):
-		flaps = clampi(int(Geo.js_round(float(cmd["flaps"]))), 0, 3)
+		flaps = int(Geo.clamp_f(Geo.js_round(float(cmd["flaps"])), 0.0, 3.0))
 	if cmd.has("gear"):
 		gear_down = bool(cmd["gear"])
+	# Clamp in the float domain before converting: int() of a huge float is not saturating.
 	if cmd.has("hdg"):
 		sel_hdg = int(Geo.js_round(Geo.norm360(float(cmd["hdg"])))) % 360
 	if cmd.has("alt"):
-		sel_alt = clampi(int(Geo.js_round(float(cmd["alt"]) / 100.0)) * 100, MIN_ALT_SEL, MAX_ALT_SEL)
+		sel_alt = int(Geo.clamp_f(Geo.js_round(float(cmd["alt"]) / 100.0) * 100.0, MIN_ALT_SEL, MAX_ALT_SEL))
 	if cmd.has("spd"):
-		sel_spd = int(Geo.js_round(float(cmd["spd"])))
+		sel_spd = int(Geo.clamp_f(Geo.js_round(float(cmd["spd"])), 0.0, 1000.0))
 	if cmd.has("alt_setting"):
-		alt_setting = clampi(int(Geo.js_round(float(cmd["alt_setting"]))), MIN_ALT_SETTING, MAX_ALT_SETTING)
+		alt_setting = int(Geo.clamp_f(Geo.js_round(float(cmd["alt_setting"])), MIN_ALT_SETTING, MAX_ALT_SETTING))
 	if cmd.has("app"):
 		app_armed = bool(cmd["app"])
 		if not app_armed:
@@ -178,7 +186,7 @@ func step(dt: float, w: SimWorld, qnh: int) -> String:
 	y += Geo.heading_dy(hdg) * nm
 	alt += (vs / 60.0) * dt
 	fuel_min = maxf(0.0, fuel_min - dt / 60.0)
-	att.update_airborne(self, dt, turn_rate)
+	att.update_airborne(dt, turn_rate, tas(), vs, ias, flaps)
 
 	# --- threshold crossing, judged on the approach state we arrived with ---
 	if prev_x > 0.0 and x <= 0.0 and absf(y) < 0.5 and loc_captured and gs_captured:
@@ -218,10 +226,42 @@ func finish(result: String) -> String:
 	return result
 
 
-## After a successful landing: flare, touchdown and rollout (kinematic, view only).
+## After a successful landing: continue down the glidepath, flare from FLARE_FT,
+## touch down, then brake to a stop on the centreline before the runway end.
+## Kinematic, for the view only; outcomes are already decided.
 func animate_landed(dt: float, w: SimWorld) -> void:
-	if status == "landed":
-		att.update_rollout(self, dt, w)
+	if status != "landed" or att.stopped:
+		return
+	# Runway 27: north of the centreline (y > 0) is right of track, so steer left.
+	var target := w.runway_heading - Geo.clamp_f(y * LOC_GAIN_DEG_PER_NM, -5.0, 5.0)
+	var turn_rate := Geo.clamp_f(Geo.angle_diff(hdg, target), -TURN_RATE_DEG_S, TURN_RATE_DEG_S)
+	hdg = Geo.norm360(hdg + turn_rate * dt)
+	if not att.on_ground:
+		var agl := alt - w.field_elev
+		if agl <= FLARE_FT:
+			# Exponential flare towards a ~100 fpm touchdown; never steeper than the approach.
+			vs = maxf(vs, -FLARE_SINK_PER_FT * agl - TOUCHDOWN_FPM)
+			ias = maxf(0.0, ias - FLARE_DECEL_KT_S * dt)
+		alt += (vs / 60.0) * dt
+		if alt <= w.field_elev:
+			alt = w.field_elev
+			vs = 0.0
+			att.on_ground = true
+	else:
+		# Past the threshold x < 0; the runway end is at x = -length.
+		var remaining := maxf(x + w.runway_length_nm - STOP_MARGIN_NM, 0.01)
+		var spd := tas()
+		var decel := maxf(ROLLOUT_DECEL_KT_S, spd * spd / (7200.0 * remaining))
+		ias = maxf(0.0, ias - decel * dt)
+		if ias <= 0.0:
+			att.stopped = true
+	var nm := (tas() / 3600.0) * dt
+	x += Geo.heading_dx(hdg) * nm
+	y += Geo.heading_dy(hdg) * nm
+	if att.on_ground:
+		att.update_ground(dt)
+	else:
+		att.update_airborne(dt, turn_rate, tas(), vs, ias, flaps)
 
 
 func rad_alt(w: SimWorld) -> Variant:
@@ -276,6 +316,8 @@ static func _r2(v: float) -> float:
 func own_view(w: SimWorld, qnh: int) -> Dictionary:
 	var ils := Geo.ils_deviation(w, x, y, alt) if is_flying() else Geo.IlsDev.new()
 	var ra: Variant = rad_alt(w)
+	var warn: Array = []
+	warn.append_array(warnings)
 	return {
 		"callsign": callsign,
 		"status": status,
@@ -299,11 +341,11 @@ func own_view(w: SimWorld, qnh: int) -> Dictionary:
 		"gear_down": gear_down,
 		"flaps": flaps,
 		"alt_setting": alt_setting,
-		"warnings": warnings.duplicate(),
+		"warnings": warn,
 		"x": x,
 		"y": y,
 		"alt_true": alt,
-		"gs": 0.0 if att.stopped else tas(),
+		"gs": tas() if is_flying() or (status == "landed" and not att.stopped) else 0.0,
 		"pitch_deg": att.pitch_deg,
 		"bank_deg": att.bank_deg,
 		"on_ground": att.on_ground,
@@ -312,10 +354,10 @@ func own_view(w: SimWorld, qnh: int) -> Dictionary:
 
 ## The contract `radar target` shape.
 func radar_view(conflict: bool, msaw: bool) -> Dictionary:
-	var trend := 0
-	if vs > 300.0:
+	var trend := 0 # landed/crashed: level, as in the TS sim (which zeroes vs on finish)
+	if is_flying() and vs > 300.0:
 		trend = 1
-	elif vs < -300.0:
+	elif is_flying() and vs < -300.0:
 		trend = -1
 	return {
 		"callsign": callsign,

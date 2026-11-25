@@ -104,7 +104,7 @@ func _omni(pos: Vector3, col: Color, energy: float, rng: float) -> void:
 	l.light_energy = energy
 	l.omni_range = rng
 	l.omni_attenuation = 1.4
-	l.light_volumetric_fog_energy = 2.5
+	l.light_volumetric_fog_energy = 40.0
 	l.shadow_enabled = false
 	add_child(l)
 

@@ -13,15 +13,15 @@ var beacon: AirportBeacon
 
 
 func _ready() -> void:
-	var concrete := StandardMaterial3D.new()
-	concrete.albedo_color = Color(0.16, 0.16, 0.155)
-	concrete.roughness = 0.85
-	var tex := AssetLookup.find_texture(["concrete"], ["diff", "albedo", "color", "col"])
-	if tex:
-		concrete.albedo_texture = tex
-		concrete.albedo_color = Color(0.5, 0.5, 0.5)
+	var concrete := AssetLookup.pbr_material("concrete_apron", Vector2.ONE, 1.0)
+	if concrete:
+		concrete.albedo_color = Color(0.45, 0.45, 0.45)
 		concrete.uv1_triplanar = true
-		concrete.uv1_scale = Vector3(0.25, 0.25, 0.25)
+		concrete.uv1_scale = Vector3(0.3, 0.3, 0.3)
+	else:
+		concrete = StandardMaterial3D.new()
+		concrete.albedo_color = Color(0.16, 0.16, 0.155)
+		concrete.roughness = 0.85
 	var shaft_h := height_m - 7.0
 	_cyl("Shaft", 3.2, 4.2, shaft_h, 12, shaft_h * 0.5, concrete)
 	_cyl("Gallery", 7.0, 5.0, 1.6, 8, shaft_h + 0.8, concrete)
@@ -32,7 +32,7 @@ func _ready() -> void:
 	glass.roughness = 0.05
 	glass.emission_enabled = true
 	glass.emission = cab_glow
-	glass.emission_energy_multiplier = 1.2
+	glass.emission_energy_multiplier = 4.0
 	_cyl("Cab", 7.6, 6.6, 4.4, 8, shaft_h + 1.6 + 2.2, glass)
 	_cyl("Roof", 8.4, 8.4, 0.7, 8, shaft_h + 6.15, concrete)
 	_cyl("Mast", 0.12, 0.18, 9.0, 6, shaft_h + 6.5 + 4.5, concrete)

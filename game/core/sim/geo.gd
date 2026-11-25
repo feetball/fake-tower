@@ -109,7 +109,13 @@ static func ils_deviation(w: SimWorld, x: float, y: float, alt: float) -> IlsDev
 	var back_course := norm360(w.course_deg + 180.0)
 	var off := angle_diff(back_course, bearing(0.0, 0.0, x, y))
 	# Close in, only "behind the threshold" loses the signal (see geo.ts for why).
-	if d > w.range_nm or d < 1e-6 or absf(off) > 90.0:
+	if d > w.range_nm or absf(off) > 90.0:
+		return out
+	# Exactly over the antenna (a step can end a hair short of the threshold): the
+	# angles are undefined; centred needles rather than "no signal", which would
+	# disconnect the approach one step before touchdown.
+	if d < 1e-6:
+		out.valid = true
 		return out
 	if absf(off) > 35.0 and d > ILS_NEAR_NM:
 		return out

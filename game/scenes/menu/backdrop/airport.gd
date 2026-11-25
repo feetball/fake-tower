@@ -9,8 +9,8 @@ extends Node3D
 
 const FT := 0.3048
 
-@export var visibility_m := 900.0
-@export var tower_position := Vector3(270.0, 0.0, -760.0)
+@export var visibility_m := 1400.0
+@export var tower_position := Vector3(230.0, 0.0, -520.0)
 @export var with_apron := true
 @export var with_ground := true
 
@@ -60,11 +60,16 @@ static func runway_frame_transform() -> Transform3D:
 
 func _build_apron(sigma: float) -> void:
 	var apron_center := tower_position + Vector3(-60.0, 0.0, -260.0)
-	var concrete := StandardMaterial3D.new()
-	concrete.albedo_color = Color(0.09, 0.09, 0.09)
-	concrete.roughness = 0.35
 	var plane := PlaneMesh.new()
 	plane.size = Vector2(160.0, 420.0)
+	var concrete := AssetLookup.pbr_material("concrete_apron", plane.size, 3.0)
+	if concrete:
+		concrete.albedo_color = Color(0.3, 0.3, 0.3)
+		concrete.roughness = 0.55
+	else:
+		concrete = StandardMaterial3D.new()
+		concrete.albedo_color = Color(0.09, 0.09, 0.09)
+		concrete.roughness = 0.35
 	var apron := MeshInstance3D.new()
 	apron.name = "Apron"
 	apron.mesh = plane
