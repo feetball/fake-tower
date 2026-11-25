@@ -257,7 +257,9 @@ export function createLobby(root: HTMLElement, actions: Actions): (s: State) => 
     const host = isHost();
     show(startBtn, host);
     const enough = connected.length >= MIN_PLAYERS;
-    startBtn.disabled = !host || !enough || s.conn !== 'open' || room.phase !== 'lobby';
+    // Not gated on `enough`: the server is authoritative on the minimum (FT_MIN_PLAYERS
+    // can lower it for testing) and answers a premature start with an error toast.
+    startBtn.disabled = !host || s.conn !== 'open' || room.phase !== 'lobby';
     setText(
       startReason,
       !host
@@ -266,7 +268,7 @@ export function createLobby(root: HTMLElement, actions: Actions): (s: State) => 
           ? 'A round is in progress.'
           : enough
             ? 'Roles are assigned at random when you start.'
-            : `Waiting for players: ${connected.length}/${MIN_PLAYERS} (2 controllers + at least 2 pilots).`,
+            : `Waiting for players: ${connected.length}/${MIN_PLAYERS} (2 controllers + at least 2 pilots). Fewer only start on a test server (FT_MIN_PLAYERS).`,
     );
     setText(
       waitingLine,
