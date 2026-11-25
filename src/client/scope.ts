@@ -5,7 +5,7 @@ import type { RadarTarget } from '../shared/protocol';
 import type { WorldDef } from '../shared/world';
 import { fitCanvas, h, MONO, setText, show, storageGet, storageSet, isTyping } from './dom';
 import { bearingTo, D2R, hdgText, holdPath, msaAt, pointAt } from './geo';
-import { state, update, type State } from './store';
+import { roundTime, state, update, type State } from './store';
 import { mmss, PHRASEOLOGY } from './text';
 
 const C = {
@@ -640,7 +640,7 @@ export function createScope(): { el: HTMLElement; render: (s: State) => void } {
     ctx.font = font(12);
     ctx.textAlign = 'left';
     ctx.textBaseline = 'top';
-    const t = s.serverTime;
+    const t = roundTime();
     const sweepAge = s.radar ? (now - s.radar.receivedAt) / 1000 : null;
     const lines = [
       `${world.icao}  ${mmss(t)}`,

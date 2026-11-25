@@ -627,9 +627,6 @@ function drawVsi(ctx: CanvasRenderingContext2D, ac: OwnAircraft, x: number, cy: 
   const ny = cy - vsiY(ac.vs, half - 10);
   ctx.strokeStyle = COL.white;
   ctx.lineWidth = 3;
-  ctx.beginPath();
-  ctx.moveTo(x + w + 30, cy);
-  ctx.lineTo(x + 4, ny);
   ctx.save();
   ctx.beginPath();
   ctx.rect(x, cy - half, w, half * 2);
@@ -869,7 +866,8 @@ export function drawHsi(ctx: CanvasRenderingContext2D, ac: OwnAircraft, selHdg: 
     ctx.stroke();
     ctx.restore();
   }
-  ctx.restore();
+  ctx.restore(); // rose rotation
+  ctx.restore(); // centre translation
 
   // aircraft symbol and lubber line (fixed)
   ctx.save();

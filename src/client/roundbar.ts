@@ -3,7 +3,7 @@
 
 import type { Actions } from './actions';
 import { h, isTyping, setClass, setText } from './dom';
-import { roundPlayer, state, type State } from './store';
+import { roundPlayer, roundTime, state, type State } from './store';
 import { mmss } from './text';
 
 export function radioLabel(s: State): { text: string; cls: 'idle' | 'rx' | 'tx' | 'blocked' } {
@@ -116,7 +116,7 @@ export function createRoundBar(actions: Actions): { el: HTMLElement; render: (s:
       setText(banner, text);
       banner.className = `role-banner ${cls}`;
     }
-    const t = s.serverTime;
+    const t = roundTime();
     setText(clock, mmss(t));
     const rl = radioLabel(s);
     setText(indicator, rl.text);

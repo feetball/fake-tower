@@ -65,6 +65,8 @@ export interface State {
   selected: string | null;
   /** Last server round time we saw (own/radar/event). */
   serverTime: number;
+  /** performance.now() when serverTime was last set. */
+  serverTimeAt: number;
 }
 
 export const HISTORY = 5;
@@ -91,6 +93,7 @@ export const state: State = {
   scratch: {},
   selected: null,
   serverTime: 0,
+  serverTimeAt: 0,
 };
 
 type Listener = (s: State) => void;
@@ -132,4 +135,10 @@ export function roundPlayer(id: PlayerId): RoundPlayer | undefined {
 
 export function isHost(): boolean {
   return !!state.room?.players.find((p) => p.id === state.selfId)?.host;
+}
+
+/** Round clock, advanced locally between server updates (2 s radar sweeps). */
+export function roundTime(): number {
+  if (state.view !== 'round' || !state.serverTimeAt) return state.serverTime;
+  return state.serverTime + Math.min(3, (performance.now() - state.serverTimeAt) / 1000);
 }
