@@ -5,7 +5,7 @@ extends FogVolume
 ## (needs Environment.volumetric_fog_enabled). Origin = centre of the layer.
 
 @export var extent := Vector3(4000.0, 70.0, 4000.0)
-@export var density := 0.012
+@export var density := 0.028
 ## Drift speed in metres per second (world space). The drift slowly swings
 ## back and forth instead of wrapping, so the banks never jump.
 @export var wind := Vector3(1.6, 0.0, 0.6)
