@@ -71,30 +71,35 @@ export interface State {
 
 export const HISTORY = 5;
 
-export const state: State = {
-  conn: 'connecting',
-  closeReason: '',
-  selfId: null,
-  protocol: null,
-  name: '',
-  view: 'menu',
-  room: null,
-  round: null,
-  own: null,
-  radar: null,
-  radio: [],
-  events: [],
-  log: [],
-  end: null,
-  lastRoundPlayers: [],
-  localPtt: false,
-  mic: { ok: false, connected: [], initDone: false },
-  volume: 0.8,
-  scratch: {},
-  selected: null,
-  serverTime: 0,
-  serverTimeAt: 0,
-};
+/** A fresh, empty store (the app uses the single `state` below; tests make their own). */
+export function createState(): State {
+  return {
+    conn: 'connecting',
+    closeReason: '',
+    selfId: null,
+    protocol: null,
+    name: '',
+    view: 'menu',
+    room: null,
+    round: null,
+    own: null,
+    radar: null,
+    radio: [],
+    events: [],
+    log: [],
+    end: null,
+    lastRoundPlayers: [],
+    localPtt: false,
+    mic: { ok: false, connected: [], initDone: false },
+    volume: 0.8,
+    scratch: {},
+    selected: null,
+    serverTime: 0,
+    serverTimeAt: 0,
+  };
+}
+
+export const state: State = createState();
 
 type Listener = (s: State) => void;
 const listeners = new Set<Listener>();

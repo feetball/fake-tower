@@ -11,8 +11,8 @@ import { createLobby } from './lobby';
 import { connect } from './net';
 import { createRoundBar } from './roundbar';
 import { createScope } from './scope';
-import { HISTORY, state, subscribe, update, type LogEntry, type State } from './store';
-import { eventText } from './text';
+import { applyServerMsg, type Effect } from './reduce';
+import { state, subscribe, update, type State } from './store';
 import type { Voice, VoiceMode } from './voice/api';
 import { createVoice } from './voice/index';
 
@@ -166,136 +166,39 @@ const actions: Actions = {
 }
 
 // ---------------------------------------------------------------- messages
-function log(s: State, text: string, kind: LogEntry['kind'] = 'info', time: number | null = s.serverTime): void {
-  s.log.push({ time, text, kind });
-  if (s.log.length > 200) s.log.splice(0, s.log.length - 200);
-}
-
-function setTime(s: State, t: number): void {
-  if (!Number.isFinite(t)) return;
-  s.serverTime = t;
-  s.serverTimeAt = performance.now();
-}
-
-function enterView(s: State, v: State['view']): void {
-  if (s.view === v) return;
-  s.view = v;
-  if (v !== 'round' && s.localPtt) {
-    s.localPtt = false;
-    net.send({ t: 'ptt', on: false });
-    const vv = voice;
-    if (vv) safe(() => vv.setLocalPtt(false));
+// State transitions live in reduce.ts (pure, unit-tested); this runs their effects.
+function runEffects(fx: Effect[]): void {
+  for (const e of fx) {
+    if (e.k === 'pttOff') {
+      net.send({ t: 'ptt', on: false });
+      const vv = voice;
+      if (vv) safe(() => vv.setLocalPtt(false));
+    } else {
+      if (e.to !== 'round') setSiren(false);
+      setVoiceMode(e.to === 'round' ? 'radio' : 'open');
+    }
   }
-  if (v !== 'round') setSiren(false);
-  setVoiceMode(v === 'round' ? 'radio' : 'open');
 }
 
 function onMsg(m: ServerMsg): void {
+  let fx: Effect[] = [];
+  update((s) => {
+    fx = applyServerMsg(s, m, performance.now());
+  });
+  runEffects(fx);
   switch (m.t) {
     case 'welcome':
-      update((s) => {
-        s.selfId = m.id;
-        s.protocol = m.protocol;
-      });
       if (m.protocol !== PROTOCOL_VERSION) toast(`Protocol mismatch: server ${m.protocol}, client ${PROTOCOL_VERSION}. Reload the page.`);
       ensureVoice();
       break;
     case 'room':
-      update((s) => {
-        const prevPhase = s.room?.phase;
-        s.room = m.room;
-        if (m.room.phase === 'lobby') {
-          if (s.view !== 'lobby') {
-            if (prevPhase && prevPhase !== 'lobby') {
-              s.lastRoundPlayers = s.round?.players ?? s.lastRoundPlayers;
-            }
-            s.round = null;
-            s.own = null;
-            s.radar = null;
-            s.end = null;
-            s.radio = [];
-            s.selected = null;
-          }
-          enterView(s, 'lobby');
-        } else if (m.room.phase === 'playing') {
-          if (s.view === 'menu' || s.view === 'lobby' || s.view === 'end') enterView(s, s.round && !s.end ? 'round' : 'waiting');
-        } else if (m.room.phase === 'ended') {
-          if (s.end) enterView(s, 'end');
-          else if (s.view === 'menu' || s.view === 'lobby') enterView(s, 'waiting');
-        }
-      });
       syncPeers();
       break;
-    case 'begin':
-      update((s) => {
-        s.round = { you: m.you, players: m.players, world: m.world, atis: m.atis, beganAt: performance.now() };
-        s.own = null;
-        s.radar = null;
-        s.events = [];
-        s.log = [];
-        s.end = null;
-        s.selected = null;
-        s.radio = [];
-        s.scratch = {};
-        setTime(s, 0);
-        log(s, `Round started. ATIS information ${m.atis.letter}, QNH ${m.atis.qnh}, runway ${m.atis.runway}.`, 'info', 0);
-        if (m.you.role === 'controller') {
-          log(s, m.you.impostor ? 'You are the IMPOSTOR controller.' : 'You are the REAL controller.', m.you.impostor ? 'bad' : 'good', 0);
-        }
-        enterView(s, 'round');
-      });
-      break;
-    case 'own':
-      update((s) => {
-        s.own = { time: m.time, ac: m.ac, receivedAt: performance.now() };
-        setTime(s, m.time);
-      });
-      break;
-    case 'radar':
-      update((s) => {
-        const prev = s.radar;
-        const history = prev?.history ?? new Map<string, { x: number; y: number }[]>();
-        const seen = new Set<string>();
-        for (const t of m.targets) {
-          seen.add(t.callsign);
-          const old = prev?.targets.find((p) => p.callsign === t.callsign);
-          const hist = history.get(t.callsign) ?? [];
-          if (old && (old.x !== t.x || old.y !== t.y)) {
-            hist.push({ x: old.x, y: old.y });
-            while (hist.length > HISTORY) hist.shift();
-          }
-          history.set(t.callsign, hist);
-          // alert transitions into the log
-          if (t.conflict && !old?.conflict) log(s, `CONFLICT ALERT ${t.callsign}`, 'bad', m.time);
-          if (t.msaw && !old?.msaw) log(s, `LOW ALTITUDE ALERT ${t.callsign} ${Math.round(t.alt)} ft`, 'bad', m.time);
-        }
-        for (const k of [...history.keys()]) if (!seen.has(k)) history.delete(k);
-        s.radar = { time: m.time, targets: m.targets, history, receivedAt: performance.now() };
-        setTime(s, m.time);
-      });
-      break;
     case 'radio':
-      update((s) => {
-        s.radio = [...m.tx];
-      });
       if (voice) {
         const v = voice;
         safe(() => v.setTransmitting([...m.tx]));
       }
-      break;
-    case 'event':
-      update((s) => {
-        s.events.push(m.event);
-        s.events.sort((a, b) => a.time - b.time);
-        log(s, eventText(m.event), m.event.kind === 'landed' ? 'good' : 'bad', m.event.time);
-      });
-      break;
-    case 'end':
-      update((s) => {
-        s.end = m.result;
-        if (s.round) s.lastRoundPlayers = s.round.players;
-        enterView(s, 'end');
-      });
       break;
     case 'rtc':
       if (voice) {
@@ -308,6 +211,12 @@ function onMsg(m: ServerMsg): void {
       break;
     case 'error':
       toast(m.msg);
+      break;
+    case 'begin':
+    case 'own':
+    case 'radar':
+    case 'event':
+    case 'end':
       break;
     default:
       console.warn('unknown message', m);

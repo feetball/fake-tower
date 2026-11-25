@@ -5,21 +5,14 @@ import type { ClientMsg, FlapSetting, OwnAircraft } from '../shared/protocol';
 import type { Actions } from './actions';
 import { chime, setSiren } from './alerts';
 import { fitCanvas, h, isTyping, setClass, setText, show } from './dom';
-import { angleDiff, D2R, hdgText, norm360 } from './geo';
+import { baroText, clampKnob, FLAP_MIN, flapsText, fuelText, type Knob, KNOB_LIMITS, nudgeKnob } from './format';
+import { angleDiff, D2R, hdgText } from './geo';
 import { drawHsi, drawPfd, fmaFor, HSI_H, HSI_W, PFD_H, PFD_W } from './pfd';
 import { drawPlate, PLATE_H, PLATE_W } from './plate';
 import { state, type State } from './store';
 import { OUTCOME_TEXT } from './text';
 
-const FLAP_MIN: Record<FlapSetting, number> = { 0: 200, 1: 180, 2: 160, 3: 135 };
-type Knob = 'hdg' | 'alt' | 'spd' | 'baro';
-
-const LIMITS: Record<Knob, { min: number; max: number; step: number; big: number }> = {
-  hdg: { min: 0, max: 359, step: 1, big: 10 },
-  alt: { min: 0, max: 20000, step: 100, big: 1000 },
-  spd: { min: 140, max: 250, step: 1, big: 10 },
-  baro: { min: 950, max: 1050, step: 1, big: 5 },
-};
+const LIMITS = KNOB_LIMITS;
 
 const RED_WARN = new Set(['TERRAIN', 'PULL UP', 'TOO LOW GEAR', 'TOO LOW TERRAIN', 'TOO LOW FLAPS', 'GLIDESLOPE', 'SINK RATE']);
 
@@ -37,11 +30,7 @@ export function createCockpit(actions: Actions): { el: HTMLElement; render: (s: 
   const send = (m: ClientMsg) => actions.send(m);
   const setKnob = (k: Knob, raw: number) => {
     if (!state.own) return;
-    const L = LIMITS[k];
-    let v = Math.round(raw);
-    if (k === 'hdg') v = norm360(v);
-    else if (k === 'alt') v = Math.max(L.min, Math.min(L.max, Math.round(v / 100) * 100));
-    else v = Math.max(L.min, Math.min(L.max, v));
+    const v = clampKnob(k, raw);
     pending[k] = { v, until: performance.now() + 1500 };
     if (k === 'hdg') send({ t: 'ap', hdg: v });
     else if (k === 'alt') send({ t: 'ap', alt: v });
@@ -49,14 +38,7 @@ export function createCockpit(actions: Actions): { el: HTMLElement; render: (s: 
     else send({ t: 'ap', altSetting: v });
     renderMcp();
   };
-  const nudge = (k: Knob, dir: number, big: boolean) => {
-    const L = LIMITS[k];
-    const base = current(k);
-    const step = big ? L.big : L.step;
-    let v = base + dir * step;
-    if (k === 'alt') v = Math.round(v / step) * step;
-    setKnob(k, v);
-  };
+  const nudge = (k: Knob, dir: number, big: boolean) => setKnob(k, nudgeKnob(k, current(k), dir, big));
 
   // ---------------------------------------------------------------- MCP DOM
   const knobInputs: Partial<Record<Knob, HTMLInputElement>> = {};
@@ -428,12 +410,11 @@ export function createCockpit(actions: Actions): { el: HTMLElement; render: (s: 
 
     setText(roDme.v, `${ac.dme.toFixed(1)} NM`);
     setText(roBrg.v, `${hdgText(ac.bearingToStation)}°`);
-    const fm = Math.max(0, ac.fuelMin);
-    const fmTxt = `${Math.floor(fm)}:${String(Math.floor((fm % 1) * 60)).padStart(2, '0')} MIN`;
-    setText(roFuel.v, fmTxt);
-    roFuel.box.className = `ro ${fm < 5 ? 'red' : fm < 10 ? 'amber' : ''}`;
-    setText(roBaro.v, ac.altSetting === 1013 ? '1013 STD' : `${ac.altSetting} hPa`);
-    setText(roFlaps.v, `${ac.flaps} · ${FLAP_MIN[ac.flaps]} kt`);
+    const fuel = fuelText(ac.fuelMin);
+    setText(roFuel.v, fuel.text);
+    roFuel.box.className = `ro ${fuel.cls}`;
+    setText(roBaro.v, baroText(ac.altSetting));
+    setText(roFlaps.v, flapsText(ac.flaps));
     setText(roGear.v, ac.gearDown ? 'DOWN ▼' : 'UP');
     roGear.box.className = `ro ${ac.gearDown ? 'green' : ''}`;
 

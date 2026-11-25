@@ -1,0 +1,76 @@
+[gd_scene load_steps=11 format=3]
+
+[ext_resource type="Script" path="res://scenes/controller/controller_view.gd" id="1_view"]
+[ext_resource type="Script" path="res://core/shot_helper.gd" id="2_shot"]
+[ext_resource type="Script" path="res://scenes/controller/room/room.gd" id="3_room"]
+[ext_resource type="Script" path="res://scenes/controller/camera/ctrl_camera.gd" id="4_cam"]
+[ext_resource type="Script" path="res://scenes/controller/scope/scope_display.gd" id="5_scope"]
+[ext_resource type="Script" path="res://scenes/controller/audio/alert_tones.gd" id="6_tones"]
+[ext_resource type="Shader" path="res://shaders/controller_scope_glass.gdshader" id="7_glass"]
+[ext_resource type="Shader" path="res://shaders/controller_panel_glass.gdshader" id="8_pglass"]
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_glass"]
+shader = ExtResource("7_glass")
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_pglass"]
+shader = ExtResource("8_pglass")
+
+[node name="ControllerView" type="Node3D"]
+script = ExtResource("1_view")
+
+[node name="ShotHelper" type="Node" parent="."]
+script = ExtResource("2_shot")
+
+[node name="Room" type="Node3D" parent="."]
+script = ExtResource("3_room")
+
+[node name="Camera" type="Camera3D" parent="."]
+near = 0.02
+far = 40.0
+current = true
+script = ExtResource("4_cam")
+
+[node name="ScopeDisplay" type="SubViewport" parent="."]
+size = Vector2i(1212, 970)
+script = ExtResource("5_scope")
+
+[node name="PanelViewport" type="SubViewport" parent="."]
+disable_3d = true
+size = Vector2i(551, 970)
+render_target_update_mode = 0
+
+[node name="Overlay" type="CanvasLayer" parent="."]
+layer = 1
+
+[node name="Screens" type="Control" parent="Overlay"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="ScopeScreen" type="TextureRect" parent="Overlay/Screens"]
+texture_filter = 2
+material = SubResource("ShaderMaterial_glass")
+layout_mode = 0
+offset_right = 1212.0
+offset_bottom = 970.0
+expand_mode = 1
+
+[node name="PanelHost" type="Control" parent="Overlay/Screens"]
+layout_mode = 0
+offset_right = 551.0
+offset_bottom = 970.0
+mouse_filter = 2
+
+[node name="PanelGlass" type="ColorRect" parent="Overlay/Screens"]
+material = SubResource("ShaderMaterial_pglass")
+layout_mode = 0
+offset_right = 551.0
+offset_bottom = 970.0
+mouse_filter = 2
+
+[node name="Alerts" type="AudioStreamPlayer" parent="."]
+script = ExtResource("6_tones")

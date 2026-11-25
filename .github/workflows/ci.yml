@@ -1,0 +1,340 @@
+name: CI
+
+# One workflow for both halves of the repo. The `changes` job decides which halves are
+# affected; the jobs of an unaffected half are skipped (not absent), and the final
+# `CI OK` job treats skipped as fine and anything failed/cancelled as a failure. Make
+# `CI OK` the single required status check: it always reports, unlike a workflow that is
+# skipped by `paths:` filters (which would leave a required check pending forever).
+
+on:
+  push:
+    branches: [main, 'claude/**']
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  changes:
+    name: Detect changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read # paths-filter lists PR files through the API
+    outputs:
+      web: ${{ github.event_name == 'workflow_dispatch' || steps.filter.outputs.web == 'true' }}
+      game: ${{ github.event_name == 'workflow_dispatch' || steps.filter.outputs.game == 'true' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            web:
+              - 'package.json'
+              - 'package-lock.json'
+              - 'tsconfig.json'
+              - 'vite.config.ts'
+              - 'vitest.config.ts'
+              - 'eslint.config.js'
+              - '.prettierrc.json'
+              - '.prettierignore'
+              - 'src/**'
+              - 'e2e/**'
+              - '.github/workflows/ci.yml'
+            game:
+              - 'game/**'
+              - '.github/workflows/ci.yml'
+              - '.github/actions/**'
+
+  # ---------------------------------------------------------------- browser prototype
+
+  static:
+    name: Typecheck and lint
+    needs: changes
+    if: needs.changes.outputs.web == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run lint
+      # Prettier check is intentionally not enforced yet: the existing source is not
+      # formatted. Run `npx prettier --write .` once, then enable:
+      # - run: npm run format:check
+
+  unit:
+    name: Unit tests (Node ${{ matrix.node }})
+    needs: changes
+    if: needs.changes.outputs.web == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [20, 22]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+      - run: npm ci
+      - name: Test with coverage
+        run: npm run test:coverage
+      - name: Coverage summary
+        if: always() && matrix.node == 22
+        run: |
+          if [ -f coverage/coverage-summary.json ]; then
+            node -e '
+              const t = JSON.parse(require("fs").readFileSync("coverage/coverage-summary.json", "utf8")).total;
+              const rows = ["lines", "statements", "functions", "branches"].map(
+                (k) => `| ${k} | ${t[k].pct}% | ${t[k].covered}/${t[k].total} |`,
+              );
+              console.log(["## Coverage", "", "| metric | pct | covered |", "| --- | --- | --- |", ...rows].join("\n"));
+            ' >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: Upload coverage
+        if: always() && matrix.node == 22
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: coverage/
+          if-no-files-found: ignore
+
+  build:
+    name: Build
+    needs: changes
+    if: needs.changes.outputs.web == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+          if-no-files-found: error
+
+  e2e:
+    name: End-to-end (Playwright)
+    needs: changes
+    if: needs.changes.outputs.web == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      # Playwright is deliberately not in package.json; e2e/smoke.mjs resolves it from
+      # the global npm root (or NODE_PATH).
+      - name: Install Playwright globally
+        run: |
+          npm install -g playwright@1.63.0
+          echo "NODE_PATH=$(npm root -g)" >> "$GITHUB_ENV"
+      - run: npx playwright install --with-deps chromium
+      - name: Run e2e
+        run: npm run e2e
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-screenshots
+          path: e2e/screenshots/
+          if-no-files-found: ignore
+
+  audit:
+    name: Dependency audit
+    needs: changes
+    if: needs.changes.outputs.web == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Audit production dependencies
+        run: npm audit --audit-level=high --omit=dev
+      - name: Audit all dependencies (informational)
+        continue-on-error: true
+        run: npm audit --audit-level=high
+
+  # ---------------------------------------------------------------- Godot game
+
+  game-import:
+    name: Game - import and script check
+    needs: changes
+    if: needs.changes.outputs.game == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-godot
+      - name: Import project (fails on script/parse/load errors)
+        run: |
+          set -o pipefail
+          godot --headless --path game --import 2>&1 | tee import.log
+          game/tools/ci_check_log.sh import.log
+      - name: Upload log
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: game-import-log
+          path: import.log
+
+  game-tests:
+    name: Game - unit and voice tests
+    needs: changes
+    if: needs.changes.outputs.game == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-godot
+        with:
+          import: 'true'
+      - name: Unit tests
+        run: |
+          set -o pipefail
+          godot --headless --path game -s res://tests/run_tests.gd 2>&1 | tee unit.log
+          game/tools/ci_check_log.sh unit.log
+      - name: Voice tests
+        run: |
+          set -o pipefail
+          godot --headless --path game -s res://tests/voice_test.gd 2>&1 | tee voice.log
+          game/tools/ci_check_log.sh voice.log
+
+  game-net:
+    name: Game - network test (4 instances)
+    needs: changes
+    if: needs.changes.outputs.game == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-godot
+        with:
+          import: 'true'
+      - run: game/tests/net_test.sh
+
+  game-smoke:
+    name: Game - smoke test (menu, pilot, pilot_far, controller)
+    needs: changes
+    if: needs.changes.outputs.game == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-godot
+        with:
+          import: 'true'
+      - run: game/tests/smoke_test.sh
+
+  game-lint:
+    name: Game - GDScript lint
+    needs: changes
+    if: needs.changes.outputs.game == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      # gdtoolkit 4.x is the series for Godot 4 (4.5.0 matches Godot 4.5).
+      - run: pip install 'gdtoolkit==4.5.0'
+      # Config and rationale: game/gdlintrc. gdformat is not enforced yet (most files are
+      # not formatted); this reports the count without failing.
+      # gdlint reads gdlintrc from the working directory, so run inside game/.
+      - name: gdlint
+        working-directory: game
+        run: gdlint .
+      - name: gdformat (informational)
+        working-directory: game
+        run: gdformat --check . || true  # prints the files that would change; never fails
+
+  game-export:
+    name: Game - export (Windows, Linux)
+    needs: changes
+    if: needs.changes.outputs.game == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-godot
+        with:
+          templates: 'true'
+          import: 'true'
+      - name: Export Windows and Linux release builds
+        run: game/tools/export_build.sh all --out "$RUNNER_TEMP/dist"
+      - name: Upload Windows build
+        uses: actions/upload-artifact@v4
+        with:
+          name: fake-tower-windows
+          path: ${{ runner.temp }}/dist/fake-tower-windows/
+          if-no-files-found: error
+          retention-days: 3
+          compression-level: 6
+      - name: Upload Linux build
+        uses: actions/upload-artifact@v4
+        with:
+          name: fake-tower-linux
+          path: ${{ runner.temp }}/dist/fake-tower-linux/
+          if-no-files-found: error
+          retention-days: 3
+          compression-level: 6
+
+  ci-ok:
+    name: CI OK
+    if: always()
+    needs:
+      - changes
+      - static
+      - unit
+      - build
+      - e2e
+      - audit
+      - game-import
+      - game-tests
+      - game-net
+      - game-smoke
+      - game-lint
+      - game-export
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check no job failed or was cancelled (skipped is fine)
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "Job results: $RESULTS"
+          for r in $RESULTS; do
+            case "$r" in
+              success | skipped) ;;
+              *)
+                echo "A job finished with result '$r'" >&2
+                exit 1
+                ;;
+            esac
+          done
