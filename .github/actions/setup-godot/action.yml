@@ -1,0 +1,91 @@
+name: Setup Godot
+description: >
+  Install Godot 4.5.1 (linux x86_64, official build) as `godot` on PATH, with the download
+  cached and verified against a pinned SHA-256. Optionally installs the release export
+  templates (only the Windows and Linux release templates) and the project import cache.
+
+inputs:
+  templates:
+    description: Install the Windows and Linux release export templates
+    default: 'false'
+  import:
+    description: Run `godot --headless --path game --import` (needed before tests, smoke and export)
+    default: 'false'
+
+runs:
+  using: composite
+  steps:
+    - name: Pin versions
+      shell: bash
+      run: |
+        {
+          echo "GODOT_VERSION=4.5.1"
+          echo "GODOT_BASE_URL=https://github.com/godotengine/godot-builds/releases/download/4.5.1-stable"
+          echo "GODOT_ZIP=Godot_v4.5.1-stable_linux.x86_64.zip"
+          echo "GODOT_ZIP_SHA256=02ec53d1cc7dbb9cc6355393c61b9ab43d1244751a124f10248a4802830788cd"
+          echo "GODOT_TPZ=Godot_v4.5.1-stable_export_templates.tpz"
+          echo "GODOT_TPZ_SHA256=1998af37f1387684e2c211cdb483daf492fc64dc6b12096bddcdca25b6910c86"
+        } >> "$GITHUB_ENV"
+
+    - name: Cache Godot binary
+      id: cache-godot
+      uses: actions/cache@v4
+      with:
+        path: ~/godot-bin
+        key: godot-4.5.1-stable-linux-x86_64-v1
+
+    - name: Download and verify Godot
+      if: steps.cache-godot.outputs.cache-hit != 'true'
+      shell: bash
+      run: |
+        set -euo pipefail
+        tmp="$(mktemp -d)"
+        curl -sSL --fail --retry 3 -o "$tmp/godot.zip" "$GODOT_BASE_URL/$GODOT_ZIP"
+        echo "$GODOT_ZIP_SHA256  $tmp/godot.zip" | sha256sum -c -
+        mkdir -p ~/godot-bin
+        unzip -q "$tmp/godot.zip" -d ~/godot-bin
+        mv ~/godot-bin/Godot_v4.5.1-stable_linux.x86_64 ~/godot-bin/godot
+        rm -rf "$tmp"
+
+    - name: Put godot on PATH
+      shell: bash
+      run: |
+        chmod +x ~/godot-bin/godot
+        echo "$HOME/godot-bin" >> "$GITHUB_PATH"
+        echo "GODOT=$HOME/godot-bin/godot" >> "$GITHUB_ENV"
+        ~/godot-bin/godot --version
+
+    - name: Cache export templates
+      id: cache-templates
+      if: inputs.templates == 'true'
+      uses: actions/cache@v4
+      with:
+        path: ~/.local/share/godot/export_templates/4.5.1.stable
+        key: godot-4.5.1-stable-export-templates-win-linux-v1
+
+    - name: Download and verify export templates
+      if: inputs.templates == 'true' && steps.cache-templates.outputs.cache-hit != 'true'
+      shell: bash
+      run: |
+        set -euo pipefail
+        tmp="$(mktemp -d)"
+        curl -sSL --fail --retry 3 -o "$tmp/templates.tpz" "$GODOT_BASE_URL/$GODOT_TPZ"
+        echo "$GODOT_TPZ_SHA256  $tmp/templates.tpz" | sha256sum -c -
+        dest=~/.local/share/godot/export_templates/4.5.1.stable
+        mkdir -p "$dest"
+        unzip -q -j "$tmp/templates.tpz" templates/version.txt templates/windows_release_x86_64.exe templates/linux_release.x86_64 -d "$dest"
+        chmod +x "$dest/linux_release.x86_64"
+        rm -rf "$tmp"
+
+    - name: Check export templates
+      if: inputs.templates == 'true'
+      shell: bash
+      run: |
+        dest=~/.local/share/godot/export_templates/4.5.1.stable
+        cat "$dest/version.txt"
+        ls -la "$dest"
+
+    - name: Import project
+      if: inputs.import == 'true'
+      shell: bash
+      run: godot --headless --path game --import

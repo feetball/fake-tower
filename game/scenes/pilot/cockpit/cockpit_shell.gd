@@ -6,12 +6,12 @@ extends Node3D
 ## switch rows, side console with sidestick, knee panel and floor.
 ## Window glass is added by Windshield; instruments by their own builders.
 
-const L := CockpitLayout
-const K := PilotMeshKit
-const M := CockpitMaterials
+const L := preload("res://scenes/pilot/cockpit/cockpit_layout.gd")
+const K := preload("res://scenes/pilot/cockpit/mesh_kit.gd")
+const M := preload("res://scenes/pilot/cockpit/cockpit_materials.gd")
 
 ## Window openings (aircraft frame). Each = [bottom-outer, bottom-inner, top-inner, top-outer].
-const C := CockpitLayout.CENTRE_X
+const C := 0.53 ## = CockpitLayout.CENTRE_X
 static var FRONT_LEFT: Array[Vector3] = [
 	Vector3(-0.43, -0.175, -0.96), Vector3(C - 0.035, -0.175, -1.17),
 	Vector3(C - 0.035, 0.235, -0.83), Vector3(-0.43, 0.22, -0.67)]

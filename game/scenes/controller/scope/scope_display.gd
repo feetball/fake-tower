@@ -72,10 +72,11 @@ func resize_to(px: Vector2i, ui_scale: float) -> void:
 	ctx.size = Vector2(px)
 	ctx.ui_scale = ui_scale
 	ctx.dcb_h = round(36.0 * maxf(ui_scale, 0.82))
+	ctx.foot_h = round(26.0 * maxf(ui_scale, 0.82))
 	for c: Control in [_bg, _map, _targets, _chrome]:
 		c.position = Vector2.ZERO
 		c.size = Vector2(px)
-	var plot := Rect2(0, ctx.dcb_h, px.x, px.y - ctx.dcb_h)
+	var plot := Rect2(0, ctx.dcb_h, px.x, px.y - ctx.dcb_h - ctx.foot_h)
 	var was := ctx.xform.plot
 	ctx.xform.plot = plot
 	if not ctx.xform.user_moved:

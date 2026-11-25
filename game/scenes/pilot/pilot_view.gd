@@ -65,6 +65,13 @@ func _apply_debug_args() -> void:
 	if v != "":
 		rig.start_view = v
 		rig.set_view(v, true)
+	if OS.get_cmdline_user_args().has("--pilot-debug-light"):
+		# Work light for checking geometry in screenshots.
+		var o := OmniLight3D.new()
+		o.light_energy = 2.0
+		o.omni_range = 5.0
+		o.position = Vector3(0.3, 0.1, 0.3)
+		aircraft.add_child(o)
 	var wx := _arg("--pilot-debug-wx=")
 	if wx != "":
 		var w := wx.split(",")

@@ -1,0 +1,24 @@
+# gdlint (gdtoolkit 4.x) config. Tuned so real problems fail CI and style nits do not.
+# Formatting (gdformat) is NOT enforced: 90 of 106 files would be reformatted at last count. To enforce
+# it: run `gdformat game` once, review, then add `gdformat --check game` to the game-lint job.
+#
+# Disabled (style / size nits, all currently violated by the codebase):
+#   max-line-length          lines of 100+ chars are used freely (tooltips, tables)
+#   class-definitions-order  declaration ordering (consts/vars/signals) is not enforced
+#   class-variable-name      PascalCase/UPPER vars holding preloads and data tables
+#   max-returns, max-public-methods   input handlers and test suites are long on purpose
+# Still enforced (defaults): naming of functions/signals/constants, duplicated-load,
+# unused-argument, no-else-return, no-elif-return, expression-not-assigned,
+# comparison-with-itself, unnecessary-pass, mixed-tabs-and-spaces, trailing-whitespace,
+# function-arguments-number, max-file-lines. Parse errors always fail.
+disable:
+- max-line-length
+- class-definitions-order
+- class-variable-name
+- max-returns
+- max-public-methods
+excluded_directories: !!set
+  .git: null
+  .godot: null
+  assets: null
+  shots: null

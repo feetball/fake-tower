@@ -22,6 +22,7 @@ var rbl_b := Vector2.ZERO
 var block_rects: Dictionary = {} ## callsign -> Rect2, filled by the target layer
 var dcb_rects: Array[Dictionary] = [] ## {id, rect}, filled by the chrome layer
 var dcb_h := 36.0
+var foot_h := 26.0 ## bottom info bar
 var status: Dictionary = {} ## icao, time, atis_letter, qnh, transition_alt
 
 

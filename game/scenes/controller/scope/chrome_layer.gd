@@ -23,9 +23,7 @@ func _draw() -> void:
 	var y := _status()
 	_alert_list(y)
 	_rbl()
-	_cursor()
-	DU.text(self, ctx.mono(500), Vector2(ctx.size.x - ctx.px(12.0), ctx.size.y - ctx.px(10.0)), HELP, ctx.fs(11.0),
-		Look.HUD_DIM, 1, 1)
+	_footer()
 
 
 func _dcb() -> void:
@@ -72,6 +70,7 @@ func _status() -> float:
 	var lh := font.get_height(fsz) * 1.08
 	var age := ctx.model.sweep_age_sec(ctx.now_ms)
 	var sep := ctx.sep()
+	print("DBG chrome age ", age, " now ", ctx.now_ms)
 	var lines: Array[Array] = [
 		["%s   %s" % [String(ctx.status.get("icao", "")), Fmt.mmss(float(ctx.status.get("time", 0.0)))], Look.HUD],
 		["ATIS %s  QNH %s" % [String(ctx.status.get("atis_letter", "-")), str(ctx.status.get("qnh", "----"))], Look.HUD],
@@ -139,8 +138,13 @@ func _rbl() -> void:
 	DU.text(self, font, mid, label, fsz, Look.RBL, -1, 0)
 
 
-func _cursor() -> void:
-	if ctx.mouse.x < 0.0 or ctx.mouse.y < ctx.dcb_h:
+func _footer() -> void:
+	var top := ctx.size.y - ctx.foot_h
+	draw_rect(Rect2(0, top, ctx.size.x, ctx.foot_h), Look.DCB_BG)
+	draw_line(Vector2(0, top + 0.5), Vector2(ctx.size.x, top + 0.5), Look.DCB_EDGE.darkened(0.3), ctx.px(1.0))
+	var mid := top + ctx.foot_h * 0.5
+	DU.text(self, ctx.mono(500), Vector2(ctx.size.x - ctx.px(12.0), mid), HELP, ctx.fs(11.0), Look.HUD_DIM, 1, 0)
+	if ctx.mouse.x < 0.0 or not ctx.xform.plot.has_point(ctx.mouse):
 		return
 	var w := ctx.xform.to_world(ctx.mouse)
 	var d := w.length()
@@ -148,4 +152,4 @@ func _cursor() -> void:
 	var msa := Fmt.msa_at(ctx.world, w)
 	if msa > 0 and d <= 25.0:
 		txt += "   MSA %d" % msa
-	DU.text(self, ctx.mono(600), Vector2(ctx.px(14.0), ctx.size.y - ctx.px(10.0)), txt, ctx.fs(13.0), Look.HUD, -1, 1)
+	DU.text(self, ctx.mono(600), Vector2(ctx.px(14.0), mid), txt, ctx.fs(13.0), Look.HUD, -1, 0)

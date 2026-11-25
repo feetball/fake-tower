@@ -9,6 +9,8 @@ signal changed()
 signal selection_changed(callsign: String)
 
 const HISTORY_LEN := 5
+## History keeps every Nth sweep position: 2 s sweeps would put the dots on top of each other.
+const HISTORY_EVERY := 2
 const LANDED_SHOW_MS := 20000
 const ALERT_REPEAT_MS := 15000
 const LAYER_KEYS: PackedStringArray = ["rr", "cl", "fix", "terr", "msa", "hold", "ptl", "hist"]
@@ -40,7 +42,7 @@ func ingest(list: Array, now_ms: int) -> PackedStringArray:
 			continue
 		seen[cs] = true
 		var prev: Dictionary = targets.get(cs, {})
-		if not prev.is_empty() and String(prev.get("status", "")) == "flying":
+		if not prev.is_empty() and String(prev.get("status", "")) == "flying" and sweep_count % HISTORY_EVERY == 0:
 			var hist: PackedVector2Array = history.get(cs, PackedVector2Array())
 			var p := Fmt.target_pos(prev)
 			if hist.is_empty() or hist[hist.size() - 1].distance_to(p) > 0.001:

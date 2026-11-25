@@ -1,0 +1,28 @@
+[gd_scene load_steps=7 format=3]
+
+[ext_resource type="Script" path="res://scenes/pilot/pilot_view.gd" id="1"]
+[ext_resource type="Script" path="res://core/shot_helper.gd" id="2"]
+[ext_resource type="Script" path="res://scenes/pilot/flight_state.gd" id="3"]
+[ext_resource type="Script" path="res://scenes/pilot/outside/pilot_outside.gd" id="4"]
+[ext_resource type="Script" path="res://scenes/pilot/cockpit/cockpit.gd" id="5"]
+[ext_resource type="Script" path="res://scenes/pilot/camera_rig.gd" id="6"]
+
+[node name="PilotView" type="Node3D"]
+script = ExtResource("1")
+
+[node name="ShotHelper" type="Node" parent="."]
+script = ExtResource("2")
+
+[node name="FlightState" type="Node" parent="."]
+script = ExtResource("3")
+
+[node name="Outside" type="Node3D" parent="."]
+script = ExtResource("4")
+
+[node name="Aircraft" type="Node3D" parent="."]
+
+[node name="Cockpit" type="Node3D" parent="Aircraft"]
+script = ExtResource("5")
+
+[node name="CameraRig" type="Node3D" parent="Aircraft"]
+script = ExtResource("6")
