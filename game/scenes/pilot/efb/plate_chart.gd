@@ -112,10 +112,10 @@ func _plan(d: Dictionary, r: Rect2) -> void:
 	var hi := Vector2(33.0, 25.0)
 	var k := minf(r.size.x / (hi.x - lo.x), r.size.y / (hi.y - lo.y))
 	var origin := r.position + Vector2(-lo.x * k + (r.size.x - (hi.x - lo.x) * k) * 0.5, hi.y * k + (r.size.y - (hi.y - lo.y) * k) * 0.5)
-	var P := func(x: float, y: float) -> Vector2: return origin + Vector2(x, -y) * k
+	var to_px := func(x: float, y: float) -> Vector2: return origin + Vector2(x, -y) * k
 	# Terrain: shaded discs with an inner contour and the summit elevation.
 	for t: Dictionary in d["terrain"]:
-		var c: Vector2 = P.call(float(t["x"]), float(t["y"]))
+		var c: Vector2 = to_px.call(float(t["x"]), float(t["y"]))
 		var rr := float(t["radius_nm"]) * k
 		draw_circle(c, rr * 1.35, TERR)
 		draw_circle(c, rr, TERR_HI)
@@ -126,35 +126,35 @@ func _plan(d: Dictionary, r: Rect2) -> void:
 		_t(c + Vector2(0, -16), String(t["name"]), 12, TERR_INK, 0)
 	# DME rings from FTW.
 	for ring: float in [10.0, 25.0]:
-		_dashed_circle(P.call(0.0, 0.0), ring * k, GREY)
-		_t(P.call(0.0, 0.0) + Vector2(ring * k * 0.71 + 6, ring * k * 0.71), "D%d" % int(ring), 12, GREY)
+		_dashed_circle(to_px.call(0.0, 0.0), ring * k, GREY)
+		_t(to_px.call(0.0, 0.0) + Vector2(ring * k * 0.71 + 6, ring * k * 0.71), "D%d" % int(ring), 12, GREY)
 	# Hold.
-	_hold(d, P, k)
+	_hold(d, to_px, k)
 	# Final course and its feather.
 	var ils: Dictionary = d["ils"]
 	var faf: Dictionary = ils["faf"]
 	var ridge := _fix(d, "RIDGE")
-	draw_line(P.call(0.0, 0.0), P.call(float(ridge["x"]) + 2.0, 0.0), INK, 3.0)
-	_t(P.call(11.0, 0.0) + Vector2(0, -16), "270°", 16, INK, 0, true)
-	_arrow(P.call(5.0, 0.0), PI, INK)
+	draw_line(to_px.call(0.0, 0.0), to_px.call(float(ridge["x"]) + 2.0, 0.0), INK, 3.0)
+	_t(to_px.call(11.0, 0.0) + Vector2(0, -16), "270°", 16, INK, 0, true)
+	_arrow(to_px.call(5.0, 0.0), PI, INK)
 	# Missed approach: straight ahead then right turn towards the hold.
-	var ma0: Vector2 = P.call(-1.4, 0.0)
-	var ma1: Vector2 = P.call(-6.0, 0.0)
-	var ma2: Vector2 = P.call(-5.0, 4.0)
-	var hp: Vector2 = P.call(float(_fix(d, "HOLDR")["x"]), float(_fix(d, "HOLDR")["y"]))
+	var ma0: Vector2 = to_px.call(-1.4, 0.0)
+	var ma1: Vector2 = to_px.call(-6.0, 0.0)
+	var ma2: Vector2 = to_px.call(-5.0, 4.0)
+	var hp: Vector2 = to_px.call(float(_fix(d, "HOLDR")["x"]), float(_fix(d, "HOLDR")["y"]))
 	_dashed(ma0, ma1, INK)
 	_dashed(ma1, ma2, INK)
 	_dashed(ma2, hp, INK)
 	_arrow(ma2.lerp(hp, 0.5), (hp - ma2).angle(), INK)
 	# Runway.
-	var a: Vector2 = P.call(0.0, 0.0)
-	var b: Vector2 = P.call(-float(d["runway"]["length_nm"]), 0.0)
+	var a: Vector2 = to_px.call(0.0, 0.0)
+	var b: Vector2 = to_px.call(-float(d["runway"]["length_nm"]), 0.0)
 	draw_line(a, b, INK, 6.0)
 	draw_line(a, b, PAPER, 2.0)
 	_t(a + Vector2(10, 16), "FTW", 13, INK, -1, true)
 	# Fixes.
 	for f: Dictionary in d["fixes"]:
-		var p: Vector2 = P.call(float(f["x"]), float(f["y"]))
+		var p: Vector2 = to_px.call(float(f["x"]), float(f["y"]))
 		var is_faf := String(f["name"]) == String(faf["name"])
 		if is_faf:
 			_maltese(p, 9.0)
@@ -175,10 +175,10 @@ func _plan(d: Dictionary, r: Rect2) -> void:
 	_t(sb + Vector2(10.0 * k + 8, 0), "10 NM", 12)
 
 
-func _hold(d: Dictionary, P: Callable, k: float) -> void:
+func _hold(d: Dictionary, to_px: Callable, k: float) -> void:
 	var h: Dictionary = d["hold"]
 	var fx := _fix(d, String(h["fix"]))
-	var p: Vector2 = P.call(float(fx["x"]), float(fx["y"]))
+	var p: Vector2 = to_px.call(float(fx["x"]), float(fx["y"]))
 	var inbound := deg_to_rad(float(h["inbound_course_deg"]))
 	var dir := Vector2(sin(inbound), -cos(inbound))
 	var right := Vector2(-dir.y, dir.x)
@@ -216,18 +216,18 @@ func _profile(d: Dictionary, r: Rect2) -> void:
 	var kx := (x1 - x0) / (ridge_x + 0.5)
 	var y_ground := r.end.y - 46.0
 	var ky := (y_ground - (r.position.y + 70.0)) / (plat + 400.0 - field)
-	var X := func(nm: float) -> float: return x0 + nm * kx
-	var Y := func(ft: float) -> float: return y_ground - (ft - field) * ky
+	var px_x := func(nm: float) -> float: return x0 + nm * kx
+	var px_y := func(ft: float) -> float: return y_ground - (ft - field) * ky
 	draw_line(Vector2(r.position.x + 10, y_ground), Vector2(r.end.x - 10, y_ground), INK, 2.0)
 	# Runway block.
 	draw_rect(Rect2(x0 - 40, y_ground - 5, 40, 5), INK)
 	_t(Vector2(x0 - 20, y_ground + 16), "RWY 27", 12, INK, 0, true)
 	_t(Vector2(x0 - 20, y_ground + 32), "TDZE %d" % int(field), 11, GREY, 0)
 	# Platform segment and glidepath.
-	var pf: Vector2 = Vector2(X.call(faf_x), Y.call(plat))
-	var pr: Vector2 = Vector2(X.call(ridge_x), Y.call(plat))
+	var pf: Vector2 = Vector2(px_x.call(faf_x), px_y.call(plat))
+	var pr: Vector2 = Vector2(px_x.call(ridge_x), px_y.call(plat))
 	draw_line(pr, pf, INK, 3.0)
-	var th: Vector2 = Vector2(X.call(0.0), Y.call(field + tch))
+	var th: Vector2 = Vector2(px_x.call(0.0), px_y.call(field + tch))
 	draw_line(pf, th, INK, 3.0)
 	_arrow(pf.lerp(th, 0.5), (th - pf).angle(), INK)
 	_arrow(pr.lerp(pf, 0.5), PI, INK)
@@ -239,16 +239,16 @@ func _profile(d: Dictionary, r: Rect2) -> void:
 	_t(pf.lerp(th, 0.45) + Vector2(34, -22), "TCH %d'" % int(tch), 13, INK, -1)
 	# Vertical reference lines and distances.
 	for nm: float in [faf_x, ridge_x]:
-		_dashed(Vector2(X.call(nm), Y.call(plat)), Vector2(X.call(nm), y_ground), GREY)
-		_t(Vector2(X.call(nm), y_ground + 16), "D%.1f" % nm, 12, INK, 0)
+		_dashed(Vector2(px_x.call(nm), px_y.call(plat)), Vector2(px_x.call(nm), y_ground), GREY)
+		_t(Vector2(px_x.call(nm), y_ground + 16), "D%.1f" % nm, 12, INK, 0)
 	_triangle(pr, 7.0)
 	_t(pr + Vector2(0, -18), "RIDGE", 13, INK, 0, true)
 	# Decision altitude.
-	var yda: float = Y.call(da)
-	_dashed(Vector2(x0, yda), Vector2(X.call(2.0), yda), Color(0.6, 0.1, 0.1))
-	_t(Vector2(X.call(2.0) + 6, yda), "DA %d'" % int(da), 14, Color(0.6, 0.1, 0.1), -1, true)
+	var yda: float = px_y.call(da)
+	_dashed(Vector2(x0, yda), Vector2(px_x.call(2.0), yda), Color(0.6, 0.1, 0.1))
+	_t(Vector2(px_x.call(2.0) + 6, yda), "DA %d'" % int(da), 14, Color(0.6, 0.1, 0.1), -1, true)
 	# Missed approach climb arrow from the threshold.
-	var m0 := Vector2(x0 - 46, Y.call(field + 300.0))
+	var m0 := Vector2(x0 - 46, px_y.call(field + 300.0))
 	_dashed(Vector2(x0 - 6, yda), m0 + Vector2(0, -50), INK)
 	_arrow(m0 + Vector2(0, -50), -PI * 0.62, INK)
 	_t(Vector2(r.position.x + 10, r.position.y + 18), "PROFILE  (not to scale vertically)", 12, GREY)
