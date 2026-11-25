@@ -36,6 +36,7 @@ Useful launch arguments (after `--`): `--demo=pilot`, `--demo=pilot_far`, `--dem
 - **Start**: the host starts the round from the lobby once at least 4 players are connected. Roles are random; the real controller and the impostor both see the radar, pilots never receive the impostor flag.
 - **Solo practice**: main menu > Solo Practice, an offline round.
 - **Radio**: hold `Space` to talk. One transmitter is heard through a radio filter; two at once block the frequency.
+- **Full guide**: [game/HOW_TO_PLAY.md](game/HOW_TO_PLAY.md) is the player manual for the Godot game: radio, pilot and controller controls, flying the ILS 27, spotting (or playing) the impostor. Builds ship it as `HOW_TO_PLAY.md` next to the executable.
 - **Controls**: pilots use the keyboard autopilot panel (`Left`/`Right` heading, `Up`/`Down` altitude, `PageUp`/`PageDown` speed, `[`/`]` altimeter, `A` approach mode, `G` gear, `F`/`Shift+F` flaps, `I` ATIS, `P` plate); controllers use the mouse on the scope. The full key list is in [game/ARCHITECTURE.md](game/ARCHITECTURE.md#input-actions-registered-in-code-by-session-at-startup) and the in-game How to Play screen.
 
 ## Tests and CI
