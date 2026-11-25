@@ -1,10 +1,12 @@
 class_name RunwayLights
 extends Node3D
 ## Runway lighting in the runway frame (origin = threshold centre, landing
-## direction −Z): white edge lights (amber over the last 2000 ft), green
+## direction −Z): white edge lights (yellow over the last 2000 ft / 600 m), green
 ## threshold bar with wing bars, red end bar, centreline lights with the
 ## standard red/white coding, touchdown zone barrettes and a 4-box PAPI on the
-## left. A few OmniLights make the wet asphalt reflect.
+## left whose boxes switch red/white from the viewer's actual elevation angle
+## (settings 2.5/2.83/3.17/3.5° for the 3° glide path, 2 white / 2 red on it).
+## A few OmniLights make the wet asphalt reflect.
 
 const FT := 0.3048
 
@@ -17,7 +19,7 @@ const FT := 0.3048
 @export var fog_glow := 1.0
 
 const WHITE := Color(1.0, 0.92, 0.78)
-const AMBER := Color(1.0, 0.62, 0.18)
+const AMBER := Color(1.0, 0.72, 0.22)
 const GREEN := Color(0.2, 1.0, 0.45)
 const RED := Color(1.0, 0.1, 0.05)
 const TDZ := Color(1.0, 0.95, 0.86)
@@ -35,6 +37,7 @@ func build() -> void:
 	var thr := _points("Threshold", Vector3(0.0, 0.1, 1.0), 2.0, 0.08)
 	var papi := _points("PAPI", Vector3(0.0, 0.05, 1.0), 6.0, 0.0)
 	papi.reflections = false
+	papi.papi = true
 	var half := width_m * 0.5 + 1.5
 	var amber_from := length_m - 2000.0 * FT
 	var z := 0.0
@@ -67,10 +70,12 @@ func build() -> void:
 	for side in [-1.0, 1.0]:
 		for k in 5:
 			thr.add_point(Vector3(side * (width_m * 0.5 + 3.0 + k * 3.0), 0.4, 1.5), GREEN, intensity * 1.2, 0.25)
-	# PAPI on glide path: the two units nearest the runway show red, the outer two white.
+	# PAPI abeam the ILS glide path origin: the unit nearest the runway is set
+	# highest, so on the glide path the inner two show red and the outer two white.
+	var glide := float(World.DATA["ils"]["glide_deg"])
 	for k in 4:
-		papi.add_point(Vector3(-(width_m * 0.5 + 15.0 + k * 9.0), 0.8, -1000.0 * FT),
-			RED if k < 2 else WHITE, intensity * 1.8, 0.4)
+		papi.add_papi_box(Vector3(-(width_m * 0.5 + 15.0 + k * 9.0), 0.8, -1000.0 * FT),
+			glide + 0.5 - k / 3.0, intensity * 1.8, 0.4)
 	for lp: LightPoints in [edges, inset, thr, papi]:
 		lp.commit()
 	if with_omni_lights:

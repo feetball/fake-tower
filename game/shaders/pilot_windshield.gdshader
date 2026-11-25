@@ -1,5 +1,6 @@
 shader_type spatial;
-// Wet windshield. Procedural water on the glass, refracting the scene behind:
+// Wet windshield film. When RainGlassEffect is unavailable it also draws the
+// water itself (fallback): procedural drops refracting the scene behind:
 // beading drops that grow and, with airspeed, are blown up the glass as
 // streaks, plus fast mist streaks in cloud. Mostly transparent: only the water
 // and a faint film are drawn, so the airfield lights (additive, drawn later
@@ -12,6 +13,8 @@ uniform float rain : hint_range(0.0, 1.0) = 0.5;
 uniform float airspeed = 150.0; // kt
 uniform float film = 0.06;
 uniform vec3 interior_glow : source_color = vec3(0.025, 0.03, 0.04);
+// Off when RainGlassEffect draws the water (it can see the light sprites).
+uniform bool drops = true;
 instance uniform vec2 glass_size = vec2(0.9, 0.6);
 instance uniform float glass_seed = 0.0;
 
@@ -83,7 +86,7 @@ void fragment() {
 	vec3 b = beads(p, 0.016, TIME, blow, 0.32 * rain + 0.05);
 	vec3 s = streaks(p, TIME, spd * 2.5) * smoothstep(0.3, 0.8, rain) * blow;
 	vec3 w = b.z >= s.z ? b : s;
-	float mask = max(b.z, s.z);
+	float mask = drops ? max(b.z, s.z) : 0.0;
 	// Inverted lens: the drop shows the scene around it, flipped and blurred.
 	vec2 offs = -w.xy * vec2(0.025, 0.035) * mask;
 	vec3 seen = textureLod(screen_tex, SCREEN_UV + offs, 1.0 + mask).rgb;

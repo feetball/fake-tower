@@ -4,8 +4,9 @@ extends Node3D
 ## threshold centre at field elevation, landing direction = local −Z, local +X
 ## = right of the landing direction. place_in_world() puts it at the real
 ## KFTW threshold in World coordinates (heading 270, field elevation).
-## Built from RunwaySurface, RunwayLights, ApproachLights, ControlTower
-## (with AirportBeacon) plus an apron with sodium floodlights and hangars.
+## Built from RunwaySurface, RunwayLights, ApproachLights, Taxiways (blue edge
+## lights, signs, terminal), ControlTower (with AirportBeacon) plus an apron
+## with sodium floodlights and hangars.
 
 const FT := 0.3048
 
@@ -21,6 +22,7 @@ var surface: RunwaySurface
 var runway_lights: RunwayLights
 var approach_lights: ApproachLights
 var tower: ControlTower
+var taxiways: Taxiways
 
 
 func _ready() -> void:
@@ -42,6 +44,12 @@ func _ready() -> void:
 	approach_lights.extinction_per_m = sigma
 	approach_lights.fog_glow = fog_glow
 	add_child(approach_lights)
+	if with_ground:
+		taxiways = Taxiways.new()
+		taxiways.name = "Taxiways"
+		taxiways.length_m = length
+		taxiways.extinction_per_m = sigma
+		add_child(taxiways)
 	tower = ControlTower.new()
 	tower.name = "Tower"
 	tower.extinction_per_m = sigma

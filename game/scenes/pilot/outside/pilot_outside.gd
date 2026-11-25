@@ -1,14 +1,19 @@
 class_name PilotOutside
 extends Node3D
 ## Everything outside the aircraft: the night environment with fog and cloud,
-## the lit aerodrome (reused backdrop pieces), terrain, town lights. All world
-## content hangs under `world_root`, which is translated by minus the eye
-## position every frame (floating origin). Fog, cloud and light extinction
-## follow PilotWeather from the ATIS visibility and ceiling.
+## the lit aerodrome (reused backdrop pieces), terrain, town lights and their
+## glow in the haze, ragged scud under the cloud base. All world content hangs
+## under `world_root`, which is translated by minus the eye position every
+## frame (floating origin). Fog, cloud and light extinction follow
+## PilotWeather from the ATIS visibility and ceiling.
 
 const FIELD_FT := 512.0
 const TOWN_SEED := 4127
 const LIGHT_EXTINCTION := 0.6
+## Airfield light tuning for the approach view (see LightPoints): lamps dim with
+## distance as d^-POINT_FALLOFF once unresolved, so rows of lights recede.
+const POINT_FALLOFF := 0.45
+const AIRFIELD_INTENSITY := 2.6
 
 var world_root: Node3D
 var env: Environment
@@ -25,6 +30,8 @@ var _debug_wx := false
 var _eye_h_ft := 3000.0
 var _last_sigma := -1.0
 var _fog_banks: FogBanks
+var _cloud_base: PilotCloudBase
+var _sky_glow: LightPoints
 ## 0..1 how much of the world (beyond the cockpit) is visible: used for sound and turbulence.
 var in_cloud := 0.0
 
@@ -54,6 +61,10 @@ func _ready() -> void:
 	_fog_banks.density = 0.01
 	_fog_banks.position = World.to_3d(-0.5, 0.0, FIELD_FT) + Vector3(0.0, 18.0, 0.0)
 	world_root.add_child(_fog_banks)
+	_cloud_base = PilotCloudBase.new()
+	_cloud_base.name = "CloudBase"
+	world_root.add_child(_cloud_base)
+	_build_sky_glow()
 	Session.round_began.connect(_read_atis)
 	_collect_airport_lights.call_deferred()
 
@@ -65,18 +76,26 @@ func _read_atis() -> void:
 	if a.is_empty():
 		return
 	weather = PilotWeather.new(float(a.get("visibility_m", 900)), float(a.get("ceiling_ft", 300)))
-	_last_sigma = -1.0
+	_weather_changed()
 
 
 ## Override the weather for reproducible screenshots.
 func debug_weather(vis_m: float, ceiling_ft: float) -> void:
 	_debug_wx = true
 	weather = PilotWeather.new(vis_m, ceiling_ft)
+	_weather_changed()
+
+
+func _weather_changed() -> void:
 	_last_sigma = -1.0
+	if _cloud_base != null:
+		_cloud_base.set_ceiling_ft(FIELD_FT + weather.ceiling_ft)
 
 
 func set_quality(q: String) -> void:
 	_volumetric = q != "low"
+	if _cloud_base != null:
+		_cloud_base.multimesh.visible_instance_count = _cloud_base.count if q != "low" else _cloud_base.count / 2
 	if env != null:
 		env.volumetric_fog_enabled = _volumetric
 		# SSR plus SubViewport displays crashes the llvmpipe software rasterizer
@@ -97,21 +116,38 @@ func set_eye(eye: Vector3) -> void:
 	_update_fog()
 
 
+## Extinction per metre of the air around the eye (drives the landing-light shafts).
+func scatter_at_eye() -> float:
+	return weather.sigma_at(maxf(_eye_h_ft, 0.0))
+
+
 func _make_environment() -> Environment:
 	var e := NightEnvironment.make(weather.visibility_m, 1.0, true, not is_software_renderer())
 	e.background_energy_multiplier = 0.35
-	e.ambient_light_energy = 0.6
-	e.fog_light_color = Color(0.035, 0.038, 0.046)
+	e.ambient_light_energy = 0.75
+	# Night fog over a lit town and airfield glows faintly warm-grey.
+	e.fog_light_color = Color(0.04, 0.038, 0.04)
 	e.volumetric_fog_albedo = Color(0.9, 0.92, 0.95)
-	e.volumetric_fog_emission = Color(0.01, 0.011, 0.014)
+	e.volumetric_fog_emission = Color(0.008, 0.0085, 0.01)
 	e.volumetric_fog_emission_energy = 1.0
 	e.volumetric_fog_anisotropy = 0.6
 	e.volumetric_fog_length = 900.0
 	e.volumetric_fog_detail_spread = 1.6
 	e.volumetric_fog_ambient_inject = 0.3
-	e.glow_intensity = 0.8
-	e.glow_bloom = 0.04
-	e.glow_hdr_threshold = 1.0
+	e.tonemap_mode = Environment.TONE_MAPPER_ACES
+	e.tonemap_exposure = 1.2
+	e.tonemap_white = 6.0
+	# Soft-light bloom weighted to the small levels: bright lamps bloom, the
+	# hundreds of lamps of the approach lights do not merge into one blob.
+	e.glow_blend_mode = Environment.GLOW_BLEND_MODE_SOFTLIGHT
+	e.glow_intensity = 0.85
+	e.glow_strength = 1.0
+	e.glow_bloom = 0.0
+	e.glow_hdr_threshold = 0.85
+	e.glow_hdr_scale = 2.0
+	var levels := [0.0, 1.0, 0.8, 0.55, 0.35, 0.2, 0.1]
+	for i in levels.size():
+		e.set_glow_level(i, levels[i])
 	e.ssao_enabled = false
 	return e
 
@@ -141,6 +177,11 @@ func _update_fog() -> void:
 	for i in _town_lights.size():
 		_town_lights[i].extinction_per_m = weather.mean_sigma(h, _town_heights_ft[i]) * LIGHT_EXTINCTION
 		_town_lights[i].apply_uniforms()
+	if _sky_glow != null:
+		# The glow is light scattered in the haze near the source: it survives
+		# much further than the lamps themselves, but not through cloud.
+		_sky_glow.extinction_per_m = weather.mean_sigma(h, 150.0) * 0.12
+		_sky_glow.apply_uniforms()
 
 
 func _collect_airport_lights() -> void:
@@ -149,9 +190,13 @@ func _collect_airport_lights() -> void:
 	# Seen from the approach through fog: brighter cores and wider scattering
 	# halos than the menu backdrop's settings.
 	for lp in _airport_lights:
-		lp.intensity_scale = 1.25
-		lp.halo_gain *= 1.5
-		lp.min_halo_angle = 0.022
+		lp.intensity_scale = AIRFIELD_INTENSITY
+		lp.point_falloff = POINT_FALLOFF
+		lp.halo_gain *= 1.3
+		lp.min_halo_angle = 0.016
+		lp.min_core_angle = 0.0019
+		lp.aureole_gain = 0.002
+		lp.aureole_angle = 0.011
 	_last_sigma = -1.0
 
 
@@ -160,6 +205,25 @@ static func _collect(n: Node, out: Array[LightPoints]) -> void:
 		out.append(n as LightPoints)
 	for c in n.get_children():
 		_collect(c, out)
+
+
+## Diffuse glow of the towns and the airfield in the low haze: huge, faint,
+## warm halos without a core. Gives the eye a horizon reference on a dark night.
+func _build_sky_glow() -> void:
+	_sky_glow = LightPoints.new()
+	_sky_glow.name = "SkyGlow"
+	_sky_glow.halo_size_m = 400.0
+	_sky_glow.halo_gain = 0.5
+	_sky_glow.min_halo_angle = 0.0
+	_sky_glow.min_core_angle = 0.0
+	var sodium := Color(1.0, 0.6, 0.32)
+	# [x nm, y nm, intensity, glow radius m] (the soft "core" is the glow)
+	var glows := [[-4.5, 3.2, 0.05, 3200.0], [6.5, -3.5, 0.03, 2200.0], [-2.0, -4.2, 0.02, 1600.0],
+		[-0.7, 0.0, 0.03, 1400.0]]
+	for g: Array in glows:
+		_sky_glow.add_point(World.to_3d(g[0], g[1], FIELD_FT) + Vector3(0.0, 120.0, 0.0), sodium, g[2], g[3])
+	world_root.add_child(_sky_glow)
+	_sky_glow.commit()
 
 
 ## Scattered light of the town east-south-east of the field, villages and a

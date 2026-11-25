@@ -2,9 +2,13 @@ class_name RunwaySurface
 extends Node3D
 ## Wet asphalt runway with painted markings, in the runway frame (origin =
 ## threshold centre, landing direction −Z). Also lays the surrounding grass.
-## Uses CC0 textures from res://assets when present (see find_texture()).
+## Asphalt and paint use shaders/runway_surface.gdshader (rubber deposits,
+## standing water, grazing backscatter so the landing lights pick them out);
+## the asphalt texture is the CC0 set from res://assets when present.
 
 const FT := 0.3048
+const SURFACE_SHADER: Shader = preload("res://shaders/runway_surface.gdshader")
+const PAINT := Color(0.72, 0.72, 0.7)
 
 @export var length_m := 1.4 * 1852.0
 @export var width_m := 45.0
@@ -21,7 +25,7 @@ func _ready() -> void:
 func build() -> void:
 	for c in get_children():
 		c.queue_free()
-	_add_plane("Asphalt", Vector2(width_m + 7.0, length_m + 60.0), Vector3(0, 0.0, -length_m * 0.5), _asphalt_material())
+	_add_plane("Asphalt", Vector2(width_m + 7.0, length_m + 60.0), Vector3(0, 0.0, -length_m * 0.5), _asphalt_material(-length_m * 0.5))
 	_add_plane("Grass", Vector2(grass_size_m, grass_size_m), Vector3(0, -0.05, -length_m * 0.5), _grass_material())
 	_build_markings()
 
@@ -40,30 +44,29 @@ func _add_plane(n: String, size: Vector2, pos: Vector3, mat: Material) -> MeshIn
 	return mi
 
 
-func _asphalt_material() -> StandardMaterial3D:
-	var size := Vector2(width_m + 7.0, length_m + 60.0)
-	var m := AssetLookup.pbr_material("asphalt_runway", size, 3.0)
-	if m:
-		m.albedo_color = Color(0.32, 0.32, 0.33)
-		# Wet: the texture's roughness scaled well down, plus a stronger normal.
-		m.roughness = lerpf(1.0, 0.3, wetness)
-		m.normal_scale = 0.6
+func _asphalt_material(origin_z: float) -> ShaderMaterial:
+	var m := ShaderMaterial.new()
+	m.shader = SURFACE_SHADER
+	m.set_shader_parameter(&"origin_z", origin_z)
+	m.set_shader_parameter(&"wetness", wetness)
+	var base := "res://assets/textures/asphalt_runway/asphalt_runway"
+	if ResourceLoader.exists(base + "_albedo_2k.jpg"):
+		m.set_shader_parameter(&"albedo_tex", load(base + "_albedo_2k.jpg"))
+		m.set_shader_parameter(&"normal_tex", load(base + "_normal_gl_2k.jpg"))
+		m.set_shader_parameter(&"arm_tex", load(base + "_arm_2k.jpg"))
+		m.set_shader_parameter(&"has_arm", true)
+		m.set_shader_parameter(&"tint", Color(0.42, 0.42, 0.43))
 	else:
-		m = StandardMaterial3D.new()
-		m.albedo_color = Color(0.055, 0.055, 0.058)
-		m.roughness = lerpf(0.6, 0.18, wetness)
-		m.roughness_texture = _noise_tex(0.004, 512, false)
-		m.normal_enabled = true
-		m.normal_scale = 0.35
-		m.normal_texture = _noise_tex(0.05, 512, true)
-		m.uv1_scale = Vector3(1.0, length_m / 60.0, 1.0)
+		m.set_shader_parameter(&"tint", Color(0.07, 0.07, 0.072))
+		m.set_shader_parameter(&"normal_tex", _noise_tex(0.05, 512, true))
+		m.set_shader_parameter(&"tile_m", 20.0)
 	return m
 
 
 func _grass_material() -> StandardMaterial3D:
 	var m := AssetLookup.pbr_material("grass_field", Vector2(grass_size_m, grass_size_m), 2.0)
 	if m:
-		m.albedo_color = Color(0.22, 0.24, 0.2)
+		m.albedo_color = Color(0.3, 0.32, 0.26)
 	else:
 		m = StandardMaterial3D.new()
 		m.albedo_color = Color(0.035, 0.042, 0.03)
@@ -87,10 +90,12 @@ func _noise_tex(freq: float, size: int, normal: bool) -> NoiseTexture2D:
 	return t
 
 
-func _paint_material() -> StandardMaterial3D:
-	var m := StandardMaterial3D.new()
-	m.albedo_color = Color(0.62, 0.62, 0.6)
-	m.roughness = 0.45
+func _paint_material() -> ShaderMaterial:
+	var m := ShaderMaterial.new()
+	m.shader = SURFACE_SHADER
+	m.set_shader_parameter(&"paint", true)
+	m.set_shader_parameter(&"tint", PAINT)
+	m.set_shader_parameter(&"wetness", wetness)
 	return m
 
 
@@ -107,6 +112,9 @@ func _build_markings() -> void:
 	while y < length_m - 60.0:
 		rects.append(Rect2(-0.45, y, 0.9, 120.0 * FT))
 		y += 200.0 * FT
+	# Side stripes along both edges, the full length.
+	for side in [-1.0, 1.0]:
+		rects.append(Rect2(side * (width_m * 0.5 - 0.6) - 0.45, 0.0, 0.9, length_m))
 	# Aiming point blocks at 1000 ft and touchdown zone pairs.
 	for side in [-1.0, 1.0]:
 		rects.append(Rect2(side * 9.0 - 4.5, 1000.0 * FT, 9.0, 45.0))
@@ -134,7 +142,7 @@ func _build_markings() -> void:
 	lbl.text = designator
 	lbl.font_size = 512
 	lbl.pixel_size = 0.04
-	lbl.modulate = Color(0.62, 0.62, 0.6)
+	lbl.modulate = PAINT
 	lbl.shaded = true
 	lbl.double_sided = false
 	lbl.outline_size = 0

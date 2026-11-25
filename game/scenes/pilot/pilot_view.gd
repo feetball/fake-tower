@@ -49,6 +49,7 @@ func _ready() -> void:
 	cockpit.setup(bus, autopilot, quality)
 	_assign_layers(cockpit)
 	interaction.camera = rig.camera
+	cockpit.windshield.attach(rig.camera)
 	interaction.controls = cockpit.controls()
 	interaction.tooltip = tooltip
 	audio.avionics = bus
@@ -84,6 +85,8 @@ func _process(delta: float) -> void:
 	rig.update_motion(delta, flight.bank)
 	var wet := 0.22 + 0.78 * cloud
 	cockpit.windshield.set_conditions(wet, bus.ias)
+	cockpit.windshield.update_view(aircraft.global_basis, delta)
+	ext_lights.set_conditions(outside.scatter_at_eye(), cloud, flight.gs * 0.5144)
 	audio.wetness = wet
 	ext_lights.gear_down = bus.gear_pos > 0.5
 	_check_landed(delta)
@@ -129,7 +132,7 @@ func _check_landed(delta: float) -> void:
 func _apply_quality() -> void:
 	outside.set_quality(quality)
 	cockpit.set_quality(quality)
-	ext_lights.set_volumetric(quality != "low")
+	ext_lights.set_quality(quality)
 
 
 ## The flight deck renders on its own layer so the exterior lights (strobes,

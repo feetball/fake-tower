@@ -47,6 +47,7 @@ func _add(n: Node3D, node_name: String) -> Node3D:
 ## Wire the parts to the data bus and the autopilot (call once, after _ready).
 func setup(bus: PilotAvionicsBus, ap: PilotAutopilot, quality: String) -> void:
 	displays.setup(bus, resolution_for(quality))
+	windshield.add_display_reflections([displays.pfd, displays.nd, displays.eicas])
 	glareshield.setup(ap, bus)
 	annunciators.setup(bus)
 	gear.setup(ap, bus)

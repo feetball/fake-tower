@@ -22,6 +22,17 @@ const SHADER: Shader = preload("res://shaders/light_point.gdshader")
 @export var reflection_gain := 0.3
 ## Minimum apparent halo size (radians) so distant lights keep a soft glow.
 @export var min_halo_angle := 0.03
+## Minimum apparent core size (radians) so distant lights never alias away.
+@export var min_core_angle := 0.0022
+## Dimming exponent for lamps smaller than min_core_angle (2 = inverse square,
+## 0 = every lamp equally bright whatever its distance).
+@export var point_falloff := 0.0
+## Fog aureole (forward scattering) strength and angular radius at optical depth 1.
+@export var aureole_gain := 0.0
+@export var aureole_angle := 0.018
+## PAPI boxes: the colour comes from the eye's elevation angle seen from each
+## box; add_papi_box() stores the box's setting angle.
+@export var papi := false
 
 var _pos: PackedVector3Array = []
 var _col: PackedColorArray = []
@@ -36,6 +47,11 @@ func add_point(pos: Vector3, color: Color, intensity: float = 4.0, core_m: float
 	_pos.append(pos)
 	_col.append(color)
 	_custom.append(Color(core_m, flash_period, flash_phase, intensity))
+
+
+## One PAPI light unit (needs `papi`): white when the eye is above setting_deg, red below.
+func add_papi_box(pos: Vector3, setting_deg: float, intensity: float = 6.0, core_m: float = 0.4) -> void:
+	add_point(pos, Color(1.0, 1.0, 1.0, setting_deg / 10.0), intensity, core_m)
 
 
 func clear_points() -> void:
@@ -105,6 +121,8 @@ func apply_uniforms() -> void:
 	if _refl_material != null:
 		_refl_material.set_shader_parameter(&"reflection", true)
 		_refl_material.set_shader_parameter(&"reflection_gain", reflection_gain)
+		# Mirrored streaks are not fog aureoles.
+		_refl_material.set_shader_parameter(&"aureole_gain", 0.0)
 		_sync_reflection_transform()
 
 
@@ -119,3 +137,8 @@ func _apply_to(m: ShaderMaterial) -> void:
 	m.set_shader_parameter(&"halo_gain", halo_gain)
 	m.set_shader_parameter(&"intensity_scale", intensity_scale)
 	m.set_shader_parameter(&"min_halo_angle", min_halo_angle)
+	m.set_shader_parameter(&"min_core_angle", min_core_angle)
+	m.set_shader_parameter(&"point_falloff", point_falloff)
+	m.set_shader_parameter(&"aureole_gain", aureole_gain)
+	m.set_shader_parameter(&"aureole_angle", aureole_angle)
+	m.set_shader_parameter(&"papi", papi)
