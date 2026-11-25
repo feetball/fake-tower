@@ -1,0 +1,148 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  static:
+    name: Typecheck and lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run lint
+      # Prettier check is intentionally not enforced yet: the existing source is not
+      # formatted. Run `npx prettier --write .` once, then enable:
+      # - run: npm run format:check
+
+  unit:
+    name: Unit tests (Node ${{ matrix.node }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [20, 22]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+      - run: npm ci
+      - name: Test with coverage
+        run: npm run test:coverage
+      - name: Coverage summary
+        if: always() && matrix.node == 22
+        run: |
+          if [ -f coverage/coverage-summary.json ]; then
+            node -e '
+              const t = JSON.parse(require("fs").readFileSync("coverage/coverage-summary.json", "utf8")).total;
+              const rows = ["lines", "statements", "functions", "branches"].map(
+                (k) => `| ${k} | ${t[k].pct}% | ${t[k].covered}/${t[k].total} |`,
+              );
+              console.log(["## Coverage", "", "| metric | pct | covered |", "| --- | --- | --- |", ...rows].join("\n"));
+            ' >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: Upload coverage
+        if: always() && matrix.node == 22
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: coverage/
+          if-no-files-found: ignore
+
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+          if-no-files-found: error
+
+  e2e:
+    name: End-to-end (Playwright)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      # Playwright is deliberately not in package.json; e2e/smoke.mjs resolves it from
+      # the global npm root (or NODE_PATH).
+      - name: Install Playwright globally
+        run: |
+          npm install -g playwright@1.63.0
+          echo "NODE_PATH=$(npm root -g)" >> "$GITHUB_ENV"
+      - run: npx playwright install --with-deps chromium
+      - name: Run e2e
+        run: npm run e2e
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-screenshots
+          path: e2e/screenshots/
+          if-no-files-found: ignore
+
+  audit:
+    name: Dependency audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Audit production dependencies
+        run: npm audit --audit-level=high --omit=dev
+      - name: Audit all dependencies (informational)
+        continue-on-error: true
+        run: npm audit --audit-level=high
+
+  ci-ok:
+    name: CI OK
+    if: always()
+    needs: [static, unit, build, e2e, audit]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check all jobs succeeded
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "Job results: $RESULTS"
+          for r in $RESULTS; do
+            if [ "$r" != "success" ]; then
+              echo "A required job did not succeed" >&2
+              exit 1
+            fi
+          done

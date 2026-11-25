@@ -1,5 +1,7 @@
 # Fake Tower
 
+[![CI](https://github.com/feetball/fake-tower/actions/workflows/ci.yml/badge.svg)](https://github.com/feetball/fake-tower/actions/workflows/ci.yml)
+
 A multiplayer social-deduction game for 4 to 8 players, played in the browser. Two players are air traffic controllers on one shared radio frequency and both claim to be the tower; one is real and one is an impostor trying to get the aircraft killed. The rest fly instrument approaches in fog with no outside view and must work out, from procedure knowledge alone, which controller to obey.
 
 ## How to play
@@ -89,8 +91,15 @@ npm start
 ## Tests
 
 - `npm test`: unit and server tests (vitest).
+- `npm run test:coverage`: the same with v8 coverage (reports in `coverage/`; thresholds in `vitest.config.ts` act as a floor and fail the run on regression).
 - `npm run typecheck`: `tsc --noEmit`.
+- `npm run lint` / `npm run lint:fix`: ESLint 9 (typescript-eslint, type-aware).
+- `npm run format:check` / `npm run format`: Prettier. Not yet enforced in CI.
 - `npm run e2e`: end-to-end smoke test. Builds the client, starts the server on a free port, and drives four headless Chromium windows through a complete round (lobby, roles, information hiding, push-to-talk and blocking, WebRTC connection check, crashing both aircraft, end screen, return to lobby). A real round takes about four minutes because the simulation runs in real time. It needs Playwright with Chromium installed globally; Playwright is not a dependency of this project. Screenshots are written to `e2e/screenshots/` (gitignored).
+
+### Continuous integration
+
+`.github/workflows/ci.yml` runs on pushes to `main` and on every pull request: typecheck + lint, unit tests with coverage (Node 20 and 22, coverage summary in the job summary and a `coverage` artifact), production build (`dist` artifact), the Playwright e2e round (installs Playwright 1.63.0 globally; `e2e-screenshots` artifact), and `npm audit` on production dependencies. The `CI OK` job aggregates all of them: make it the single required status check. Dependabot updates npm and GitHub Actions weekly.
 
 ## Project layout
 
