@@ -40,7 +40,7 @@ jobs:
             v*) ;;
             *) echo "Tag '$TAG' must start with v" >&2; exit 1 ;;
           esac
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
