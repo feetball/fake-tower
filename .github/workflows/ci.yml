@@ -589,7 +589,8 @@ jobs:
 
   # Proves the exported project compiles and links: Godot's iOS template ships
   # simulator slices (libgodot.ios.*.xcframework/ios-arm64_x86_64-simulator), so it
-  # builds for the simulator without signing.
+  # builds for the simulator without signing. The simulator libgodot.a holds x86_64
+  # objects only (despite the slice name), hence ARCHS=x86_64.
   game-ios-build:
     name: Game - iOS simulator build (xcodebuild)
     needs: [changes, game-ios-export]
@@ -613,6 +614,7 @@ jobs:
           xcodebuild -project FakeTower.xcodeproj -scheme FakeTower -configuration Debug \
             -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
             -derivedDataPath "$RUNNER_TEMP/dd" \
+            ARCHS=x86_64 ONLY_ACTIVE_ARCH=NO \
             CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" build 2>&1 | tail -n 60
           find "$RUNNER_TEMP/dd" -name '*.app' -maxdepth 6 -print
 

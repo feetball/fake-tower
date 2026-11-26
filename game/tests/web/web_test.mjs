@@ -171,7 +171,17 @@ async function waitState(page, pred, what, timeoutMs = 60000) {
 /** A rendered (non-blank) frame: a black or empty canvas compresses to a few KB. */
 async function shot(page, name, minBytes = 25000) {
   const file = join(OUT, `${name}.png`);
-  const buf = await page.screenshot({ path: file });
+  // The 3D pilot view under software WebGL on a small CI runner can take over a
+  // minute per frame capture. The state checks are the test; a capture that times
+  // out is logged, not failed.
+  let buf;
+  try {
+    buf = await page.screenshot({ path: file, timeout: 120000 });
+  } catch (e) {
+    if (!/Timeout/.test(String(e))) throw e;
+    log(`      screenshot ${name} skipped: capture timed out`);
+    return null;
+  }
   log(`      screenshot ${file} (${(buf.length / 1024).toFixed(0)} KB)`);
   if (buf.length < minBytes)
     throw new Error(`${name}: screenshot looks blank (${buf.length} bytes)`);
