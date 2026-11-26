@@ -108,7 +108,7 @@ jobs:
           fi
       - name: Upload coverage
         if: always() && matrix.node == 22
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: coverage
           path: coverage/
@@ -128,7 +128,7 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run build
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: dist
           path: dist/
@@ -158,7 +158,7 @@ jobs:
         run: npm run e2e
       - name: Upload screenshots
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: e2e-screenshots
           path: e2e/screenshots/
@@ -200,7 +200,7 @@ jobs:
           game/tools/ci_check_log.sh import.log
       - name: Upload log
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: game-import-log
           path: import.log
@@ -291,7 +291,7 @@ jobs:
       - name: Export Windows and Linux release builds
         run: game/tools/export_build.sh all --out "$RUNNER_TEMP/dist"
       - name: Upload Windows build
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: fake-tower-windows
           path: ${{ runner.temp }}/dist/fake-tower-windows/
@@ -299,7 +299,7 @@ jobs:
           retention-days: 3
           compression-level: 6
       - name: Upload Linux build
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: fake-tower-linux
           path: ${{ runner.temp }}/dist/fake-tower-linux/
@@ -382,14 +382,14 @@ jobs:
         run: node game/tests/web/web_test.mjs --dir "$RUNNER_TEMP/dist/fake-tower-web" --out "$RUNNER_TEMP/web-test"
       - name: Upload browser test screenshots and logs
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: web-test-output
           path: ${{ runner.temp }}/web-test/
           if-no-files-found: ignore
           retention-days: 3
       - name: Upload web build
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: fake-tower-web
           path: ${{ runner.temp }}/dist/fake-tower-web/
@@ -415,7 +415,7 @@ jobs:
       # Upload the zip itself: artifacts drop file modes and symlinks, the zip keeps the
       # app bundle intact.
       - name: Upload macOS build
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: fake-tower-macos
           path: ${{ runner.temp }}/dist/fake-tower-macos.zip
@@ -482,7 +482,7 @@ jobs:
           exit $rc
       - name: Upload macOS logs and screenshot
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: macos-run-output
           path: |
@@ -553,7 +553,7 @@ jobs:
           "$bt/apksigner" verify --print-certs "$apk" | head -n 5
           ls -la "$apk"
       - name: Upload Android build
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: fake-tower-android
           path: ${{ runner.temp }}/dist/fake-tower-android/
@@ -579,7 +579,7 @@ jobs:
       - name: Export the Xcode project
         run: game/tools/export_build.sh ios --zip --out "$RUNNER_TEMP/dist"
       - name: Upload Xcode project
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: fake-tower-ios-xcode
           path: ${{ runner.temp }}/dist/fake-tower-ios.zip
