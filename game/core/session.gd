@@ -36,6 +36,10 @@ const CHANNEL_RELIABLE := 0
 const CHANNEL_OWN := 1
 const ENET_CHANNELS := 4 ## Voice uses channel 2
 const WS_HANDSHAKE_TIMEOUT_SEC := 20.0 ## client; Godot's default is 3 s
+## A tab that stalls for a while (background, shader compile, slow device) must
+## not drop queued state: Godot's 64 KB / 2048-packet defaults overflow in seconds.
+const WS_BUFFER_BYTES := 4 * 1024 * 1024
+const WS_MAX_QUEUED_PACKETS := 16384
 ## ENet slots beyond MAX_PLAYERS so a full or running room can still refuse politely.
 const MAX_CLIENTS := 15
 const RATE_WINDOW_MS := 1000
@@ -183,6 +187,7 @@ func join_game(player_name: String, address: String, port: int = DEFAULT_PORT, t
 		# The default 3 s is too short for a page still compiling shaders on its first
 		# frames (phones, software WebGL): the handshake completes, but is only polled late.
 		ws.handshake_timeout = WS_HANDSHAKE_TIMEOUT_SEC
+		_ws_buffers(ws)
 		err = ws.create_client(target)
 		peer = ws
 	if err != OK:
@@ -534,6 +539,7 @@ func _listen(port: int, ws_port: int) -> Error:
 		multi.add(enet)
 	if ws_port > 0:
 		var ws := WebSocketMultiplayerPeer.new()
+		_ws_buffers(ws)
 		var err2 := ws.create_server(ws_port)
 		if err2 != OK:
 			multi.close()
@@ -717,3 +723,9 @@ func _run_dedicated(a: LaunchArgs) -> void:
 	if start_server(a.port, a.ws_port) != OK:
 		push_error("Dedicated server could not start")
 		get_tree().quit(1)
+
+
+func _ws_buffers(ws: WebSocketMultiplayerPeer) -> void:
+	ws.inbound_buffer_size = WS_BUFFER_BYTES
+	ws.outbound_buffer_size = WS_BUFFER_BYTES
+	ws.max_queued_packets = WS_MAX_QUEUED_PACKETS
