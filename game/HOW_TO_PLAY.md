@@ -590,7 +590,7 @@ Everywhere else the ground is at 512 ft.
 
 ## 10. Touch controls (phones and tablets)
 
-On a device with a touchscreen (phones and tablets in landscape, touch browsers) the game shows on-screen controls, and everything above can be done without a keyboard. On a computer without a touchscreen nothing changes. The buttons are sized for a finger (about 9 mm on a 6-inch phone) and keep clear of notches and rounded corners.
+On a device with a touchscreen (phones and tablets in landscape, touch browsers) the game shows on-screen controls, and everything above can be done without a keyboard. On a Windows, macOS or Linux computer nothing changes, even with a touchscreen; start the game with `--touch` after `--` to force the touch controls on. The buttons are sized for a finger (about 9 mm on a 6-inch phone) and keep clear of notches and rounded corners.
 
 You can use two hands at once: holding **PTT** with one thumb does not stop the other hand from turning knobs, dragging the view or pressing buttons.
 

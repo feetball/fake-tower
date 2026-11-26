@@ -2,7 +2,7 @@ class_name TouchMode
 extends RefCounted
 ## Whether the touch UI is shown, and the shared touch metrics.
 ##
-## Active when the device has a touchscreen (DisplayServer.is_touchscreen_available())
+## Active on phones, tablets and browsers that have a touchscreen
 ## or the user arg `--touch` is given (testing / screenshots on a desktop).
 ## `--no-touch` forces it off. Desktop behaviour is unchanged when inactive.
 ##
@@ -32,7 +32,10 @@ static func active() -> bool:
 		elif args.has("--touch"):
 			_active = 1
 		else:
-			_active = 1 if DisplayServer.is_touchscreen_available() else 0
+			# Touchscreen laptops keep the desktop UI: only phones, tablets and
+			# touch browsers switch automatically.
+			var handheld := OS.has_feature("mobile") or OS.has_feature("web")
+			_active = 1 if handheld and DisplayServer.is_touchscreen_available() else 0
 	return _active == 1
 
 
