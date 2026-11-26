@@ -129,6 +129,11 @@ void fragment() {
 		vec4 scene = INV_PROJECTION_MATRIX * vec4(ndc, depth, 1.0);
 		float scene_z = scene.z / scene.w;
 		float bias = occlusion_bias_m + abs(v_center_z) * 0.002;
+#if CURRENT_RENDERER == RENDERER_COMPATIBILITY
+		// 24-bit non-reversed depth: the reconstructed depth is only good to about
+		// z^2 * 2^-24 / near (metres), several metres at 2 km with the cockpit's near plane.
+		bias += v_center_z * v_center_z * 4e-6;
+#endif
 		vis = smoothstep(bias, 0.0, scene_z - v_center_z);
 	}
 	if (vis <= 0.0) {

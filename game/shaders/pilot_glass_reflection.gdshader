@@ -11,5 +11,10 @@ uniform float strength = 0.018;
 void fragment() {
 	vec2 e = min(UV, 1.0 - UV);
 	float edge = smoothstep(0.0, 0.06, min(e.x, e.y));
+#if CURRENT_RENDERER == RENDERER_COMPATIBILITY
+	// The display viewport has no mipmaps; GLES3 reads higher levels as black.
+	ALBEDO = textureLod(screen_tex, UV, 0.0).rgb * strength * edge;
+#else
 	ALBEDO = textureLod(screen_tex, UV, 3.0).rgb * strength * edge;
+#endif
 }

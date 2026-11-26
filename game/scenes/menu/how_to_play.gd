@@ -84,7 +84,10 @@ static func build(compact: bool = false) -> VBoxContainer:
 		col.add_child(h)
 		col.add_child(UiKit.bullets(spec[1], text_var))
 		cols.add_child(col)
-	var radio := UiKit.label(RADIO_LINE, text_var, true)
+	var radio_line := RADIO_LINE
+	if TouchMode.active():
+		radio_line = RADIO_LINE.replace("push-to-talk on Space", "push-to-talk: hold the PTT button (bottom right)")
+	var radio := UiKit.label(radio_line, text_var, true)
 	radio.add_theme_color_override(&"font_color", UiTheme.TEXT)
 	return UiKit.vbox(18 if not compact else 12, [cols, UiKit.hsep(), radio])
 

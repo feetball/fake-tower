@@ -114,7 +114,7 @@ func _build() -> void:
 
 func _button(txt: String, cap: String) -> TouchButton:
 	var b := TouchButton.make(txt, Vector2(COL_W, TouchMode.TARGET_PX), cap)
-	b.glass_alpha = 0.84
+	b.glass_alpha = 1.0 # opaque: the HDR glareshield digits bleed through any transparency
 	add_child(b)
 	return b
 

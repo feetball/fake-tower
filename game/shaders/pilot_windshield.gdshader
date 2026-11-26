@@ -89,8 +89,19 @@ void fragment() {
 	float mask = drops ? max(b.z, s.z) : 0.0;
 	// Inverted lens: the drop shows the scene around it, flipped and blurred.
 	vec2 offs = -w.xy * vec2(0.025, 0.035) * mask;
+#if CURRENT_RENDERER == RENDERER_COMPATIBILITY
+	// Compatibility (GLES3 / WebGL 2) has no screen-texture mipmaps (higher levels
+	// read black): sample level 0 and blur the haze with a few taps instead.
+	vec3 seen = textureLod(screen_tex, SCREEN_UV + offs, 0.0).rgb;
+	vec2 r = vec2(0.012, 0.02);
+	vec3 haze = (textureLod(screen_tex, SCREEN_UV + vec2(r.x, 0.0), 0.0).rgb
+		+ textureLod(screen_tex, SCREEN_UV - vec2(r.x, 0.0), 0.0).rgb
+		+ textureLod(screen_tex, SCREEN_UV + vec2(0.0, r.y), 0.0).rgb
+		+ textureLod(screen_tex, SCREEN_UV - vec2(0.0, r.y), 0.0).rgb) * 0.25;
+#else
 	vec3 seen = textureLod(screen_tex, SCREEN_UV + offs, 1.0 + mask).rgb;
 	vec3 haze = textureLod(screen_tex, SCREEN_UV, 3.5).rgb;
+#endif
 	float rim = pow(clamp(length(w.xy), 0.0, 1.0), 4.0) * mask;
 	vec3 col = seen * 1.15 + haze * 0.35 + interior_glow * (0.5 + rim * 3.0);
 	float film_a = film * (0.4 + rain);

@@ -62,7 +62,7 @@ var lit_text_color := Color(0, 0, 0, 0):
 			lit_text_color = v
 			queue_redraw()
 ## Draw a dimmer, more transparent body (for buttons over the 3D view).
-var glass_alpha := 0.78
+var glass_alpha := 0.9
 var corner := 4
 
 var held := false

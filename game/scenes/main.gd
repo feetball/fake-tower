@@ -225,7 +225,8 @@ func _process(_delta: float) -> void:
 	if _touch_menu == null:
 		return
 	# Outside a round (menu, lobby, end screen); the HUD strip has its own.
-	_touch_menu.visible = not _hud.visible and not _settings.visible and _fade.color.a < 0.5
+	_touch_menu.visible = not _hud.visible and not _settings.visible and _fade.color.a < 0.5 \
+		and not (_menu != null and _menu.is_overlay_open())
 	var safe := TouchMode.safe_rect(get_viewport())
 	_touch_menu.position = Vector2(safe.end.x - _touch_menu.size.x - TouchMode.EDGE * 2.0,
 		safe.position.y + TouchMode.EDGE * 2.0)

@@ -150,6 +150,7 @@ func _build_touch(row: HBoxContainer) -> void:
 	_touch_ptt.font_size = 40
 	_touch_ptt.caption_size = 16
 	_touch_ptt.corner = 18
+	_touch_ptt.glass_alpha = 1.0
 	_touch_ptt.down.connect(func() -> void:
 		_touch_held = true
 		_apply_ptt())

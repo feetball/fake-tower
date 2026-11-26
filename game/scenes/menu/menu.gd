@@ -65,6 +65,11 @@ func main_panel() -> MainMenuPanel:
 	return _main
 
 
+## True while an overlay (How to Play) covers the menu.
+func is_overlay_open() -> bool:
+	return _howto.visible
+
+
 ## True when Esc was consumed by closing an overlay inside the menu.
 func close_overlay() -> bool:
 	if _howto.visible:
