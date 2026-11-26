@@ -1,6 +1,6 @@
 # Licences
 
-Every asset in this folder is licensed CC0 1.0 Universal (public domain dedication), https://creativecommons.org/publicdomain/zero/1.0/ . Attribution is not required (credits given as a courtesy). Downloaded 2026-11-25 from https://polyhaven.com via api.polyhaven.com / dl.polyhaven.org.
+Every asset in this folder except the fonts (see the end of this file, SIL OFL 1.1) is licensed CC0 1.0 Universal (public domain dedication), https://creativecommons.org/publicdomain/zero/1.0/ . Attribution is not required (credits given as a courtesy). Downloaded 2026-11-25 from https://polyhaven.com via api.polyhaven.com / dl.polyhaven.org.
 
 Textures were re-encoded to JPEG (quality 82-85) to reduce size; model textures and HDRIs are untouched 1k downloads.
 
@@ -51,3 +51,13 @@ Textures were re-encoded to JPEG (quality 82-85) to reduce size; model textures 
 | `models/television_01/` | Television_01 | Gabriel Radić (All) | https://polyhaven.com/a/Television_01 | CC0 1.0 | 2026-11-25 |
 | `models/utility_box_01/` | utility_box_01 | James Ray Cock (All) | https://polyhaven.com/a/utility_box_01 | CC0 1.0 | 2026-11-25 |
 | `models/wetfloorsign_01/` | WetFloorSign_01 | Fran Calvente (All) | https://polyhaven.com/a/WetFloorSign_01 | CC0 1.0 | 2026-11-25 |
+
+## Fonts (SIL Open Font License 1.1, licence texts next to the files)
+
+Bundled so the UI looks the same where the families are not installed (Web, Android,
+iOS, most Windows/macOS machines); see `ui/bundled_fonts.gd`.
+
+| Local path | Original name / id | Author(s) | Source URL | Licence | Downloaded |
+|---|---|---|---|---|---|
+| `fonts/InterVariable.ttf` | Inter 4.1, InterVariable.ttf | Rasmus Andersson and the Inter project authors | https://github.com/rsms/inter/releases/tag/v4.1 | OFL 1.1 (`fonts/Inter-OFL.txt`) | 2026-11-26 |
+| `fonts/JetBrainsMono-Variable.ttf` | JetBrains Mono 2.304, JetBrainsMono[wght].ttf | The JetBrains Mono Project Authors | https://github.com/JetBrains/JetBrainsMono/releases/tag/v2.304 | OFL 1.1 (`fonts/JetBrainsMono-OFL.txt`) | 2026-11-26 |

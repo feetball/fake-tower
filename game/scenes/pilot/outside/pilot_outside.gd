@@ -14,8 +14,12 @@ const LIGHT_EXTINCTION := 0.6
 ## distance as d^-POINT_FALLOFF once unresolved, so rows of lights recede.
 const POINT_FALLOFF := 0.45
 const AIRFIELD_INTENSITY := 2.6
-## How much of the volumetric medium the depth fog takes over without volumetric fog.
+## Without volumetric fog (Mobile, Compatibility): how much of the volumetric medium
+## the depth fog takes over, and the colour of that fog below / inside the cloud
+## (standing in for the medium lit by the town glow and by the aircraft's own lights).
 const FALLBACK_FOG_GAIN := 1.0
+const FALLBACK_FOG_CLEAR := Color(0.055, 0.053, 0.055)
+const FALLBACK_FOG_CLOUD := Color(0.12, 0.12, 0.125)
 
 var world_root: Node3D
 var env: Environment
@@ -172,6 +176,7 @@ func _update_fog() -> void:
 	env.volumetric_fog_density = local_sigma * 0.9
 	if not env.volumetric_fog_enabled:
 		env.fog_density += RenderCaps.fallback_density(local_sigma * 0.9) * FALLBACK_FOG_GAIN
+		env.fog_light_color = FALLBACK_FOG_CLEAR.lerp(FALLBACK_FOG_CLOUD, in_cloud)
 	# Lights are seen much further than dark objects (Allard vs Koschmieder).
 	for lp in _airport_lights:
 		lp.extinction_per_m = ground_sigma * LIGHT_EXTINCTION

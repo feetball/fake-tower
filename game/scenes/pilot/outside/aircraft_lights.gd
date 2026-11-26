@@ -12,6 +12,8 @@ extends Node3D
 
 const C := 0.53
 const SPOT_FOG := 0.45
+## Shaft brightness when there is no volumetric fog (low tier, Mobile, Compatibility).
+const SHAFT_FALLBACK_GAIN := 2.5
 const BEAM_SHADER: Shader = preload("res://shaders/light_beam.gdshader")
 const RAIN_SHADER: Shader = preload("res://shaders/rain_streaks.gdshader")
 const LANDING_HALF_ANGLE := 8.5
@@ -151,8 +153,10 @@ func set_quality(q: String) -> void:
 func set_conditions(scatter_per_m: float, cloud: float, tas_ms: float) -> void:
 	# Shafts: in-scattered light grows with the density of the medium; a thick
 	# cloud gives a short, bright beam, thin fog a long faint one.
+	# Without volumetric fog the shafts alone carry the lit haze ahead of the nose.
+	var gain := 1.0 if volumetric and RenderCaps.has_volumetric_fog() else SHAFT_FALLBACK_GAIN
 	for m in _shafts:
-		m.set_shader_parameter(&"intensity", clampf(scatter_per_m * 9.0, 0.0, 0.22))
+		m.set_shader_parameter(&"intensity", clampf(scatter_per_m * 9.0 * gain, 0.0, 0.22 * gain))
 		m.set_shader_parameter(&"extinction_per_m", scatter_per_m * 0.8)
 	# In cloud the "rain" is dense mist; below it, steady light rain.
 	_rain_mat.set_shader_parameter(&"amount", lerpf(0.45, 1.0, cloud))

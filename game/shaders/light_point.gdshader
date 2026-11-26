@@ -130,9 +130,10 @@ void fragment() {
 		float scene_z = scene.z / scene.w;
 		float bias = occlusion_bias_m + abs(v_center_z) * 0.002;
 #if CURRENT_RENDERER == RENDERER_COMPATIBILITY
-		// 24-bit non-reversed depth: the reconstructed depth is only good to about
-		// z^2 * 2^-24 / near (metres), several metres at 2 km with the cockpit's near plane.
-		bias += v_center_z * v_center_z * 4e-6;
+		// The GLES3 depth buffer (24-bit, not reversed) reconstructs far depths far too
+		// coarsely with the cockpit's 3 cm near plane: lamps on the ground kilometres
+		// away read as occluded. Only clearly nearer geometry (hills, the airframe) hides them.
+		bias += abs(v_center_z) * 0.25;
 #endif
 		vis = smoothstep(bias, 0.0, scene_z - v_center_z);
 	}

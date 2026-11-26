@@ -33,7 +33,7 @@ static func font(bold: bool = true) -> Font:
 		f.hinting = TextServer.HINTING_NONE
 		f.subpixel_positioning = TextServer.SUBPIXEL_POSITIONING_DISABLED
 		f.generate_mipmaps = true
-		_fonts[key] = f
+		_fonts[key] = BundledFonts.or_system(f)
 	return _fonts[key]
 
 
@@ -45,7 +45,7 @@ static func sans(bold: bool = true) -> Font:
 		f.font_weight = 650 if bold else 450
 		f.antialiasing = TextServer.FONT_ANTIALIASING_GRAY
 		f.generate_mipmaps = true
-		_fonts[key] = f
+		_fonts[key] = BundledFonts.or_system(f)
 	return _fonts[key]
 
 

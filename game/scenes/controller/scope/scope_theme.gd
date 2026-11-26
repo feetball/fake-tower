@@ -76,5 +76,5 @@ static func _font(kind: String, names: PackedStringArray, weight: int) -> Font:
 		f.hinting = TextServer.HINTING_LIGHT
 		f.subpixel_positioning = TextServer.SUBPIXEL_POSITIONING_DISABLED
 		f.allow_system_fallback = true
-		_fonts[key] = f
+		_fonts[key] = BundledFonts.or_system(f)
 	return _fonts[key]

@@ -25,6 +25,9 @@ const FORWARD_PLUS := "forward_plus"
 const MOBILE := "mobile"
 const COMPATIBILITY := "gl_compatibility"
 const TIERS: Array[String] = ["low", "medium", "high"]
+## Brightness of the depth fog standing in for volumetric fog (see fog_fallback).
+const FALLBACK_FOG_LIGHT := 1.6
+const FALLBACK_FOG_TINT := Color(1.08, 0.98, 0.86)
 
 
 ## "forward_plus" | "mobile" | "gl_compatibility".
@@ -128,10 +131,15 @@ static func fog_fallback(env: Environment, fog_gain: float = 1.0) -> void:
 	var e := env.volumetric_fog_emission * env.volumetric_fog_emission_energy
 	var amb := env.ambient_light_color * env.ambient_light_energy * env.volumetric_fog_ambient_inject
 	var a := env.volumetric_fog_albedo
-	env.fog_light_color = Color(
-		c.r + e.r * 0.6 + a.r * amb.r * 0.05,
-		c.g + e.g * 0.6 + a.g * amb.g * 0.05,
-		c.b + e.b * 0.6 + a.b * amb.b * 0.05)
+	# Brighter than the depth fog alone: the volumetric medium also carried the
+	# light it scattered from the lamps, which the softlight glow darkens otherwise.
+	var fog := Color(
+		(c.r + e.r + a.r * amb.r * 0.05) * FALLBACK_FOG_LIGHT,
+		(c.g + e.g + a.g * amb.g * 0.05) * FALLBACK_FOG_LIGHT,
+		(c.b + e.b + a.b * amb.b * 0.05) * FALLBACK_FOG_LIGHT)
+	# That scattered lamp light is warm (incandescent / sodium): same brightness, warmer hue.
+	var lum := fog.get_luminance()
+	env.fog_light_color = fog.lerp(FALLBACK_FOG_TINT * lum, 0.6)
 	env.fog_light_energy = 1.0
 
 

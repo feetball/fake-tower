@@ -2,12 +2,19 @@ name: Setup Godot
 description: >
   Install Godot 4.5.1 (linux x86_64, official build) as `godot` on PATH, with the download
   cached and verified against a pinned SHA-256. Optionally installs the release export
-  templates (only the Windows and Linux release templates) and the project import cache.
+  templates (the Windows and Linux release templates, plus any `extra-templates`) and the
+  project import cache.
 
 inputs:
   templates:
     description: Install the Windows and Linux release export templates
     default: 'false'
+  extra-templates:
+    description: >
+      With templates, also install these members of the .tpz (space-separated file names), e.g.
+      "web_nothreads_release.zip macos.zip ios.zip android_release.apk android_debug.apk"
+      for tools/export_build.sh web / macos / ios / android.
+    default: ''
   import:
     description: Run `godot --headless --path game --import` (needed before tests, smoke and export)
     default: 'false'
@@ -61,7 +68,7 @@ runs:
       uses: actions/cache@v4
       with:
         path: ~/.local/share/godot/export_templates/4.5.1.stable
-        key: godot-4.5.1-stable-export-templates-win-linux-v1
+        key: godot-4.5.1-stable-export-templates-win-linux-v1${{ inputs.extra-templates != '' && format('-{0}', inputs.extra-templates) || '' }}
 
     - name: Download and verify export templates
       if: inputs.templates == 'true' && steps.cache-templates.outputs.cache-hit != 'true'
@@ -73,7 +80,9 @@ runs:
         echo "$GODOT_TPZ_SHA256  $tmp/templates.tpz" | sha256sum -c -
         dest=~/.local/share/godot/export_templates/4.5.1.stable
         mkdir -p "$dest"
-        unzip -q -j "$tmp/templates.tpz" templates/version.txt templates/windows_release_x86_64.exe templates/linux_release.x86_64 -d "$dest"
+        extra=()
+        for f in ${{ inputs.extra-templates }}; do extra+=("templates/$f"); done
+        unzip -q -j "$tmp/templates.tpz" templates/version.txt templates/windows_release_x86_64.exe templates/linux_release.x86_64 "${extra[@]}" -d "$dest"
         chmod +x "$dest/linux_release.x86_64"
         rm -rf "$tmp"
 

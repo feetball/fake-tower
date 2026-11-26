@@ -3,7 +3,7 @@
 # with the Godot log next to it in $LOGDIR (default: a temp dir, printed at the end).
 # Usage: tools/platform_shots.sh [renderer...] [-- scene...]
 #   renderers: forward_plus mobile gl_compatibility (default: all three)
-#   scenes:    menu pilot_panel pilot_outside controller hud end (default: all)
+#   scenes:    menu pilot_panel pilot_outside controller controller_room hud end (default: all)
 #   env PREFIX  file name prefix (default plat), SEC seconds before the shot (default 6)
 set -u
 HERE="$(cd "$(dirname "$0")" && pwd)"
@@ -18,7 +18,7 @@ while [ $# -gt 0 ]; do
   RENDERERS+=("$1"); shift
 done
 [ ${#RENDERERS[@]} -gt 0 ] || RENDERERS=(forward_plus mobile gl_compatibility)
-[ ${#SCENES[@]} -gt 0 ] || SCENES=(menu pilot_panel pilot_outside controller hud end)
+[ ${#SCENES[@]} -gt 0 ] || SCENES=(menu pilot_panel pilot_outside controller controller_room hud end)
 mkdir -p "$GAME/shots" "$LOGDIR"
 for r in "${RENDERERS[@]}"; do
   for s in "${SCENES[@]}"; do
@@ -27,6 +27,7 @@ for r in "${RENDERERS[@]}"; do
       pilot_panel) args=(res://scenes/pilot/pilot_view.tscn -- --demo=pilot --pilot-view=panel) ;;
       pilot_outside) args=(res://scenes/pilot/pilot_view.tscn -- --demo=pilot --pilot-view=outside --pilot-debug-pos=1.2,400) ;;
       controller) args=(-- --demo=controller) ;;
+      controller_room) args=(res://scenes/controller/controller_view.tscn -- --demo=controller --ctrl-debug-targets --ctrl-framing=room) ;;
       hud) args=(-- --ui-demo=hud_pilot) ;;
       end) args=(-- --ui-demo=end) ;;
       *) echo "unknown scene $s" >&2; exit 2 ;;

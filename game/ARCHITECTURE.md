@@ -237,7 +237,31 @@ squelch, heterodyne squeal when blocked (`Session.radio_tx.size() >= 2`).
 `tools/shot.sh out.png 4 res://scenes/pilot/pilot_view.tscn -- --demo=pilot`
 runs Godot under Xvfb with software Vulkan (slow: several seconds per frame
 with volumetric fog) and saves a 1920×1080 PNG. Every runnable scene includes
-`core/shot_helper.gd`.
+`core/shot_helper.gd`. `RENDERER=mobile|gl_compatibility tools/shot.sh ...` renders
+with the other renderers (Compatibility through OpenGL/llvmpipe), and
+`tools/platform_shots.sh` shoots every screen under all three into
+`shots/plat_<renderer>_<scene>.png`.
+
+## Platforms and renderers (`world3d/render_caps.gd`, class `RenderCaps`)
+
+| Platform | Renderer | Default quality |
+|---|---|---|
+| Windows, Linux, macOS | Forward+ (`renderer/rendering_method`) | high |
+| Android, iOS | Mobile (`rendering_method.mobile`) | low |
+| Web (WebGL 2, single-threaded build) | Compatibility (`rendering_method.web`) | low |
+
+Views never test renderer names: they ask `RenderCaps` (`has_volumetric_fog()`,
+`has_fog_volumes()`, `has_ssr()`, `has_ssao()`, `has_compute_effects()`,
+`is_compatibility()`, `quality()`). Without volumetric fog,
+`RenderCaps.enable_volumetric_fog(env)` folds the medium into lit depth fog and
+`FogGlow` (scenes/menu/backdrop) draws soft glow sprites for the lights that lit the
+fog. Shaders branch on `CURRENT_RENDERER == RENDERER_COMPATIBILITY` where GLES3
+differs (depth NDC z in −1..1, no screen-texture mipmaps, coarse 24-bit depth).
+Quality tier: `--quality=low|medium|high` (or `--pilot-quality=`) overrides the
+default. On the web the page URL carries launch args: session keys via
+`core/net/launch_args.gd`, view/debug keys (`pilot-*`, `ctrl-*`, `ui-*`,
+`quality`) via the HTML shell `tools/web/shell.html`. Exports: `tools/export_build.sh
+<windows|linux|web|macos|android|ios>`.
 
 ## Visual direction
 
