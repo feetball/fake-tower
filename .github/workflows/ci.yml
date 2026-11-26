@@ -261,7 +261,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
       # gdtoolkit 4.x is the series for Godot 4 (4.5.0 matches Godot 4.5).
