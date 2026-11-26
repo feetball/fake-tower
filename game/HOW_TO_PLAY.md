@@ -44,10 +44,11 @@ Everyone knows which two players are controllers. Only the two controllers know 
 | Menu item | What it does |
 | --- | --- |
 | **Host Game** | Opens a game on UDP port **27270** and takes you to the lobby. |
-| **Join Game** | Opens the address form. Type the host's IP address and the port (27270 unless the host changed it), then Connect. |
+| **Join Game** | Opens the address form. Type the host's IP address and the port (27270 unless the host changed it), then Connect. In a browser the form is always open and the port defaults to 27271 (WebSocket). |
 | **Solo Practice** | An offline round. You fly one aircraft that starts at an arrival gate, with two computer-flown aircraft and no controllers. Use it to learn the cockpit. |
 | **How to Play** | The rules and controls overlay. Esc closes it. |
 | **Settings** | Master volume, fullscreen, leave game, quit. |
+| **Quit** | Closes the game. Not shown in a browser or on iPhone/iPad (close the tab or swipe the app away). |
 
 Enter your name first (up to 16 characters). Esc opens Settings at any time, including during a round. **The game does not pause.** On a touchscreen, the **MENU** button (top right) opens Settings instead; see section 10.
 
@@ -60,6 +61,16 @@ Enter your name first (up to 16 characters). Esc opens Settings at any time, inc
 5. Roles are assigned at random when you press Start Round. With 4 players you get 2 controllers and 2 pilots. Every extra player is a pilot.
 
 **Joining.** Join Game, enter the host's address, press Connect. Wait in the lobby for the host to start.
+
+**Joining from a browser or a phone.** A browser cannot host and can only connect over WebSocket; phones usually cannot accept incoming connections either. So browser and phone players join a game hosted on a PC (it listens on UDP 27270 and WebSocket TCP 27271 at once) or, better, a **dedicated server** (see `SERVER.md` in the repository: one command, no player needed on that machine). In the join box:
+
+| You are on | Type | Connects to |
+| --- | --- | --- |
+| The web game on an `https://` page (for example GitHub Pages) | `wss://tower.example.org` or just `tower.example.org` | the server's TLS proxy on port 443 (browsers on https pages may only use `wss://`) |
+| The web game on an `http://` page or `localhost` | `server-host` (port box 27271) or `ws://server-host:27271` | the server's WebSocket port |
+| The Android or iPhone/iPad app | the host's address, like on a PC (UDP 27270), or a `ws://` / `wss://` address | ENet, or WebSocket when written as a URL |
+
+A link can do the joining for you: `index.html?join=wss://tower.example.org&name=Ann` opens the web game, fills in your name and connects. The microphone only works on `https://` pages or `localhost`; the browser asks for permission when you enter the lobby. On a touchscreen, hold the big **PTT** button to talk (section 10).
 
 **Microphone.** The lobby shows whether your mic works and a level meter. With no microphone you can listen but not talk.
 

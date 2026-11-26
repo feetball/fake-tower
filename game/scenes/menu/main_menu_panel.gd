@@ -23,13 +23,16 @@ var _web := OS.has_feature("web")
 func _ready() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
+	# Touch layouts make every item a finger-sized target: tighten the gaps so the whole
+	# column (with the join form open) still fits a 1080-high canvas.
+	var compact := TouchMode.active()
 	var col := UiKit.vbox(0)
 	col.position = Vector2(150.0, 0.0)
 	col.set_anchors_preset(Control.PRESET_LEFT_WIDE)
 	col.offset_left = 150.0
 	col.offset_right = 150.0 + 620.0
-	col.offset_top = 150.0
-	col.offset_bottom = -90.0
+	col.offset_top = 70.0 if compact else 150.0
+	col.offset_bottom = -30.0 if compact else -90.0
 	add_child(col)
 
 	var title := UiKit.label("FAKE TOWER", &"Title")
@@ -37,7 +40,7 @@ func _ready() -> void:
 	col.add_child(UiKit.spacer(4.0))
 	var tagline := UiKit.label("Two voices claim to be the tower. One is lying.", &"Tagline")
 	col.add_child(tagline)
-	col.add_child(UiKit.spacer(64.0))
+	col.add_child(UiKit.spacer(24.0 if compact else 64.0))
 
 	col.add_child(UiKit.heading("Your name on the frequency"))
 	col.add_child(UiKit.spacer(10.0))
@@ -46,7 +49,7 @@ func _ready() -> void:
 	_name.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 	_name.text_submitted.connect(func(_t: String) -> void: _first_item().grab_focus())
 	col.add_child(_name)
-	col.add_child(UiKit.spacer(34.0))
+	col.add_child(UiKit.spacer(16.0 if compact else 34.0))
 
 	var menu := UiKit.vbox(2)
 	# Pull the items left by their hover-rule padding so their text lines up with the title.
@@ -71,9 +74,11 @@ func _ready() -> void:
 	_add_item(menu, "Solo Practice", _on_solo)
 	_add_item(menu, "How to Play", func() -> void: how_to_play_requested.emit())
 	_add_item(menu, "Settings", func() -> void: settings_requested.emit())
-	_add_item(menu, "Quit", func() -> void: get_tree().quit())
+	# A browser tab cannot be quit, and iOS apps must not quit themselves.
+	if not _web and not OS.has_feature("ios"):
+		_add_item(menu, "Quit", func() -> void: get_tree().quit())
 
-	col.add_child(UiKit.spacer(24.0))
+	col.add_child(UiKit.spacer(12.0 if compact else 24.0))
 	_status = UiKit.label("", &"Dim", true)
 	_status.custom_minimum_size = Vector2(560.0, 0.0)
 	col.add_child(_status)

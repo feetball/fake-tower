@@ -14,11 +14,23 @@ const C := 0.53
 const SPOT_FOG := 0.45
 ## Shaft brightness when there is no volumetric fog (low tier, Mobile, Compatibility).
 const SHAFT_FALLBACK_GAIN := 2.5
+## Further shaft gain under Compatibility (web), see set_conditions.
+const SHAFT_COMPAT_GAIN := 3.0
 const BEAM_SHADER: Shader = preload("res://shaders/light_beam.gdshader")
 const RAIN_SHADER: Shader = preload("res://shaders/rain_streaks.gdshader")
 const LANDING_HALF_ANGLE := 8.5
 const SHAFT_LENGTH := 260.0
 const RAIN_DROPS := {"low": 1200, "medium": 2600, "high": 4200}
+## Without volumetric fog: a soft glow sprite for the haze the landing lights light up
+## ahead of the nose (the shafts start below the glareshield's line of sight).
+## [position in the aircraft frame, radius m, brightness per unit of extinction (1/m)].
+const LANDING_GLOW_POS := Vector3(C, -4.0, -60.0)
+const LANDING_GLOW_RADIUS := 42.0
+const LANDING_GLOW_GAIN := 6.0
+const LANDING_GLOW_MAX := 0.18
+const LANDING_GLOW_COMPAT_GAIN := 2.0
+## Height band (m above the field) over which the glow fades in.
+const LANDING_GLOW_FADE_M := Vector2(40.0, 100.0)
 
 @export var volumetric := true
 
@@ -29,8 +41,13 @@ var _strobes: Array[OmniLight3D] = []
 var _beacon: OmniLight3D
 var _rain: MultiMeshInstance3D
 var _rain_mat: ShaderMaterial
+## Null where volumetric fog does this job (Forward+).
+var _glow: MeshInstance3D
+var _glow_mat: StandardMaterial3D
 var _t := 0.0
 var gear_down := true
+## Eye height above the field (m), for the landing-light glow fade.
+var height_m := 1000.0
 
 
 func _ready() -> void:
@@ -47,6 +64,40 @@ func _ready() -> void:
 		_omni(Vector3(C + side * 16.8, -2.2, 13.0), Color(1.0, 0.1, 0.05) if side < 0.0 else Color(0.1, 1.0, 0.3), 14.0).light_energy = 1.2
 	_beacon = _omni(Vector3(C, 0.9, 14.0), Color(1.0, 0.08, 0.03), 45.0)
 	_build_rain()
+	if not RenderCaps.has_volumetric_fog():
+		_build_landing_glow()
+
+
+## A camera-facing additive sprite with a soft radial falloff. Unlike the LightPoints
+## glows it is depth-tested, so the flight deck in front hides it.
+func _build_landing_glow() -> void:
+	var tex := GradientTexture2D.new()
+	tex.fill = GradientTexture2D.FILL_RADIAL
+	tex.fill_from = Vector2(0.5, 0.5)
+	tex.fill_to = Vector2(1.0, 0.5)
+	tex.width = 128
+	tex.height = 128
+	var g := Gradient.new()
+	g.offsets = PackedFloat32Array([0.0, 0.35, 1.0])
+	g.colors = PackedColorArray([Color(1, 1, 1), Color(0.35, 0.35, 0.35), Color(0, 0, 0)])
+	tex.gradient = g
+	_glow_mat = StandardMaterial3D.new()
+	_glow_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	_glow_mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	_glow_mat.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
+	_glow_mat.disable_fog = true
+	_glow_mat.depth_draw_mode = BaseMaterial3D.DEPTH_DRAW_DISABLED
+	_glow_mat.albedo_texture = tex
+	_glow_mat.albedo_color = Color.BLACK
+	var quad := QuadMesh.new()
+	quad.size = Vector2.ONE * LANDING_GLOW_RADIUS * 2.0
+	_glow = MeshInstance3D.new()
+	_glow.name = "LandingGlow"
+	_glow.mesh = quad
+	_glow.material_override = _glow_mat
+	_glow.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_glow.position = LANDING_GLOW_POS
+	add_child(_glow)
 
 
 func _spot(pos: Vector3, col: Color, energy: float, rng: float, angle: float) -> SpotLight3D:
@@ -155,9 +206,21 @@ func set_conditions(scatter_per_m: float, cloud: float, tas_ms: float) -> void:
 	# cloud gives a short, bright beam, thin fog a long faint one.
 	# Without volumetric fog the shafts alone carry the lit haze ahead of the nose.
 	var gain := 1.0 if volumetric and RenderCaps.has_volumetric_fog() else SHAFT_FALLBACK_GAIN
+	if RenderCaps.is_compatibility():
+		# GLES3 tone-maps each additive layer on its own, which flattens faint ones to black.
+		gain *= SHAFT_COMPAT_GAIN
 	for m in _shafts:
 		m.set_shader_parameter(&"intensity", clampf(scatter_per_m * 9.0 * gain, 0.0, 0.22 * gain))
 		m.set_shader_parameter(&"extinction_per_m", scatter_per_m * 0.8)
+	if _glow != null:
+		var k := clampf(scatter_per_m * LANDING_GLOW_GAIN, 0.0, LANDING_GLOW_MAX)
+		# Low over the ground the sprite would cut into the terrain (and the lit ground
+		# takes over): fade it out below ~300 ft.
+		k *= smoothstep(LANDING_GLOW_FADE_M.x, LANDING_GLOW_FADE_M.y, height_m)
+		# GLES3 tone-maps each additive layer on its own (faint ones vanish): push it there.
+		k *= LANDING_GLOW_COMPAT_GAIN if RenderCaps.is_compatibility() else 1.0
+		_glow_mat.albedo_color = Color(1.0, 0.95, 0.88) * k
+		_glow.visible = k > 0.002
 	# In cloud the "rain" is dense mist; below it, steady light rain.
 	_rain_mat.set_shader_parameter(&"amount", lerpf(0.45, 1.0, cloud))
 	_rain_mat.set_shader_parameter(&"brightness", lerpf(1.0, 0.7, cloud))

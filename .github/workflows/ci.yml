@@ -47,6 +47,7 @@ jobs:
               - '.prettierignore'
               - 'src/**'
               - 'e2e/**'
+              - 'game/tests/web/**' # linted by the root eslint
               - '.github/workflows/ci.yml'
             game:
               - 'game/**'
@@ -306,6 +307,315 @@ jobs:
           retention-days: 3
           compression-level: 6
 
+  game-ws-net:
+    name: Game - WebSocket / dedicated server test
+    needs: changes
+    if: needs.changes.outputs.game == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-godot
+        with:
+          import: 'true'
+      # Exits non-zero when any PASS/FAIL check fails (game/tests/ws_net_test.sh).
+      - run: game/tests/ws_net_test.sh
+
+  game-touch:
+    name: Game - touch UI simulation (pilot, controller)
+    needs: changes
+    if: needs.changes.outputs.game == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-godot
+        with:
+          import: 'true'
+      # touch_sim.gd prints PASS/FAIL per check and quits with 1 when any failed;
+      # the log check also fails on script errors.
+      - name: Touch simulation (pilot)
+        run: |
+          set -o pipefail
+          timeout 300 godot --headless --path game res://ui/touch/dev/touch_sim.tscn -- --touch --sim=pilot 2>&1 | tee touch_pilot.log
+          game/tools/ci_check_log.sh touch_pilot.log
+      - name: Touch simulation (controller)
+        run: |
+          set -o pipefail
+          timeout 300 godot --headless --path game res://ui/touch/dev/touch_sim.tscn -- --touch --sim=controller 2>&1 | tee touch_controller.log
+          game/tools/ci_check_log.sh touch_controller.log
+
+  game-web:
+    name: Game - web export and browser test (Playwright)
+    needs: changes
+    if: needs.changes.outputs.game == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-godot
+        with:
+          templates: 'true'
+          extra-templates: web_nothreads_release.zip
+          import: 'true'
+      - name: Export web build
+        run: game/tools/export_build.sh web --out "$RUNNER_TEMP/dist"
+      - name: Size check (GitHub Pages refuses files over 100 MB)
+        run: |
+          ls -la "$RUNNER_TEMP/dist/fake-tower-web"
+          big="$(find "$RUNNER_TEMP/dist/fake-tower-web" -type f -size +95M)"
+          if [ -n "$big" ]; then echo "Files too large for GitHub Pages: $big" >&2; exit 1; fi
+          echo "## Web build" >> "$GITHUB_STEP_SUMMARY"
+          ls -la "$RUNNER_TEMP/dist/fake-tower-web" | awk '{print "    " $0}' >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      # Same Playwright as the root e2e job (not a repo dependency; resolved globally).
+      - name: Install Playwright
+        run: |
+          npm install -g playwright@1.63.0
+          echo "NODE_PATH=$(npm root -g)" >> "$GITHUB_ENV"
+          npx playwright install --with-deps chromium
+      # load, demo, touch (phone emulation, PTT + autopilot strip), multiplayer (headless
+      # dedicated server + two browsers over WebSocket; uses $GODOT from setup-godot).
+      - name: Browser tests
+        run: node game/tests/web/web_test.mjs --dir "$RUNNER_TEMP/dist/fake-tower-web" --out "$RUNNER_TEMP/web-test"
+      - name: Upload browser test screenshots and logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-test-output
+          path: ${{ runner.temp }}/web-test/
+          if-no-files-found: ignore
+          retention-days: 3
+      - name: Upload web build
+        uses: actions/upload-artifact@v4
+        with:
+          name: fake-tower-web
+          path: ${{ runner.temp }}/dist/fake-tower-web/
+          if-no-files-found: error
+          retention-days: 3
+          compression-level: 6
+
+  game-macos-export:
+    name: Game - macOS export
+    needs: changes
+    if: needs.changes.outputs.game == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-godot
+        with:
+          templates: 'true'
+          extra-templates: macos.zip
+          import: 'true'
+      - name: Export macOS app (universal, ad-hoc signed)
+        run: game/tools/export_build.sh macos --zip --out "$RUNNER_TEMP/dist"
+      # Upload the zip itself: artifacts drop file modes and symlinks, the zip keeps the
+      # app bundle intact.
+      - name: Upload macOS build
+        uses: actions/upload-artifact@v4
+        with:
+          name: fake-tower-macos
+          path: ${{ runner.temp }}/dist/fake-tower-macos.zip
+          if-no-files-found: error
+          retention-days: 3
+          compression-level: 0
+
+  # The "does it work on a Mac" evidence. macOS minutes cost 10x on private repos:
+  # one job runs the exported app (headless and in a real window) and the unit tests
+  # from source, nothing else.
+  game-macos-run:
+    name: Game - macOS run (exported app + unit tests)
+    needs: [changes, game-macos-export]
+    if: needs.changes.outputs.game == 'true'
+    runs-on: macos-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: fake-tower-macos
+          path: ${{ runner.temp }}/mac
+      - name: Unpack the app
+        run: |
+          cd "$RUNNER_TEMP/mac"
+          ditto -x -k fake-tower-macos.zip .
+          app="$RUNNER_TEMP/mac/fake-tower-macos/Fake Tower.app"
+          bin="$app/Contents/MacOS/Fake Tower"
+          test -x "$bin"
+          file "$bin"
+          lipo -archs "$bin"
+          codesign -dv "$app" 2>&1 | head -n 5 || true
+          echo "FT_BIN=$bin" >> "$GITHUB_ENV"
+      # Same args as game/tests/smoke_test.sh: an exported release template accepts
+      # --headless and --quit-after like the editor binary.
+      - name: Run the exported app headless (menu, pilot, controller)
+        run: |
+          set +e
+          # macOS has no coreutils timeout: perl's alarm kills a hung run (exit 142).
+          limit() { perl -e 'alarm shift; exec @ARGV' "$@"; }
+          fail=0
+          for mode in menu pilot controller; do
+            args=(); [ "$mode" = menu ] || args=(-- "--demo=$mode")
+            limit 180 "$FT_BIN" --headless --quit-after 300 "${args[@]}" > "mac_$mode.log" 2>&1
+            rc=$?
+            if [ $rc -ne 0 ] || ! game/tools/ci_check_log.sh "mac_$mode.log"; then
+              echo "FAIL macOS app $mode (exit $rc)"; tail -n 30 "mac_$mode.log"; fail=1
+            else
+              echo "PASS macOS app $mode"
+            fi
+          done
+          exit $fail
+      # A real window with Metal for a few seconds; runner GPUs are unreliable, so this
+      # one may fail without failing the job.
+      - name: Run the exported app in a window and take a screenshot
+        continue-on-error: true
+        run: |
+          set +e
+          perl -e 'alarm shift; exec @ARGV' 120 "$FT_BIN" -- --demo=pilot --pilot-view=outside --pilot-debug-pos=0.7,230 \
+            --shot="$RUNNER_TEMP/macos_pilot.png" --shot-after=8 > mac_window.log 2>&1
+          rc=$?
+          tail -n 20 mac_window.log
+          ls -la "$RUNNER_TEMP/macos_pilot.png"
+          exit $rc
+      - name: Upload macOS logs and screenshot
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-run-output
+          path: |
+            mac_*.log
+            ${{ runner.temp }}/macos_pilot.png
+          if-no-files-found: ignore
+          retention-days: 3
+      - uses: ./.github/actions/setup-godot
+        with:
+          import: 'true'
+      - name: Unit tests from source on macOS
+        run: |
+          set -o pipefail
+          godot --headless --path game -s res://tests/run_tests.gd 2>&1 | tee unit_macos.log
+          game/tools/ci_check_log.sh unit_macos.log
+
+  game-android:
+    name: Game - Android debug APK
+    needs: changes
+    if: needs.changes.outputs.game == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: ./.github/actions/setup-godot
+        with:
+          templates: 'true'
+          extra-templates: android_debug.apk
+          import: 'true'
+      # The runner image ships the Android SDK (ANDROID_HOME) with build-tools. Godot
+      # reads the SDK and JDK paths from its editor settings.
+      - name: Point Godot at the Android SDK and JDK, make a debug keystore
+        run: |
+          set -euo pipefail
+          sdk="${ANDROID_HOME:-$ANDROID_SDK_ROOT}"
+          ls "$sdk/build-tools"
+          settings=~/.config/godot/editor_settings-4.5.tres
+          mkdir -p "$(dirname "$settings")"
+          [ -f "$settings" ] || printf '[gd_resource type="EditorSettings" format=3]\n\n[resource]\n' > "$settings"
+          sed -i '/^export\/android\/\(android_sdk_path\|java_sdk_path\)/d' "$settings"
+          printf 'export/android/android_sdk_path = "%s"\nexport/android/java_sdk_path = "%s"\n' "$sdk" "$JAVA_HOME" >> "$settings"
+          ks="$RUNNER_TEMP/debug.keystore"
+          keytool -genkeypair -v -keystore "$ks" -storepass android -keypass android -alias androiddebugkey \
+            -dname "CN=Android Debug,O=Android,C=US" -keyalg RSA -keysize 2048 -validity 10000
+          {
+            echo "GODOT_ANDROID_KEYSTORE_DEBUG_PATH=$ks"
+            echo "GODOT_ANDROID_KEYSTORE_DEBUG_USER=androiddebugkey"
+            echo "GODOT_ANDROID_KEYSTORE_DEBUG_PASSWORD=android"
+          } >> "$GITHUB_ENV"
+      - name: Export debug APK
+        run: game/tools/export_build.sh android --out "$RUNNER_TEMP/dist"
+      - name: Check the APK (package, permissions, ABI, signature)
+        run: |
+          set -euo pipefail
+          apk="$RUNNER_TEMP/dist/fake-tower-android/FakeTower.apk"
+          bt="$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -n 1)"
+          "$bt/aapt" dump badging "$apk" > badging.txt || true # informational; strict checks below
+          grep -E "^(package|sdkVersion|targetSdkVersion|application-label):" badging.txt || true
+          "$bt/aapt" dump permissions "$apk" | tee permissions.txt
+          grep -q "^package: net.faketower.game" permissions.txt
+          grep -q "uses-permission: name='android.permission.RECORD_AUDIO'" permissions.txt
+          grep -q "uses-permission: name='android.permission.INTERNET'" permissions.txt
+          unzip -l "$apk" | grep -q "lib/arm64-v8a/libgodot_android.so"
+          "$bt/apksigner" verify --print-certs "$apk" | head -n 5
+          ls -la "$apk"
+      - name: Upload Android build
+        uses: actions/upload-artifact@v4
+        with:
+          name: fake-tower-android
+          path: ${{ runner.temp }}/dist/fake-tower-android/
+          if-no-files-found: error
+          retention-days: 3
+          compression-level: 0
+
+  game-ios-export:
+    name: Game - iOS Xcode project
+    needs: changes
+    if: needs.changes.outputs.game == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      IOS_TEAM_ID: ABCDE12345 # dummy: only needed to write the project; signing is off below
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-godot
+        with:
+          templates: 'true'
+          extra-templates: ios.zip
+          import: 'true'
+      - name: Export the Xcode project
+        run: game/tools/export_build.sh ios --zip --out "$RUNNER_TEMP/dist"
+      - name: Upload Xcode project
+        uses: actions/upload-artifact@v4
+        with:
+          name: fake-tower-ios-xcode
+          path: ${{ runner.temp }}/dist/fake-tower-ios.zip
+          if-no-files-found: error
+          retention-days: 3
+          compression-level: 0
+
+  # Proves the exported project compiles and links: Godot's iOS template ships
+  # simulator slices (libgodot.ios.*.xcframework/ios-arm64_x86_64-simulator), so it
+  # builds for the simulator without signing.
+  game-ios-build:
+    name: Game - iOS simulator build (xcodebuild)
+    needs: [changes, game-ios-export]
+    if: needs.changes.outputs.game == 'true'
+    runs-on: macos-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: fake-tower-ios-xcode
+          path: ${{ runner.temp }}/ios
+      - name: Build for the iOS simulator (unsigned)
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/ios"
+          ditto -x -k fake-tower-ios.zip .
+          cd fake-tower-ios
+          ls
+          xcodebuild -version
+          xcodebuild -project FakeTower.xcodeproj -list
+          xcodebuild -project FakeTower.xcodeproj -scheme FakeTower -configuration Debug \
+            -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath "$RUNNER_TEMP/dd" \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" build 2>&1 | tail -n 60
+          find "$RUNNER_TEMP/dd" -name '*.app' -maxdepth 6 -print
+
   ci-ok:
     name: CI OK
     if: always()
@@ -322,6 +632,14 @@ jobs:
       - game-smoke
       - game-lint
       - game-export
+      - game-ws-net
+      - game-touch
+      - game-web
+      - game-macos-export
+      - game-macos-run
+      - game-android
+      - game-ios-export
+      - game-ios-build
     runs-on: ubuntu-latest
     steps:
       - name: Check no job failed or was cancelled (skipped is fine)

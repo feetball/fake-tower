@@ -89,9 +89,10 @@ void fragment() {
 	float mask = drops ? max(b.z, s.z) : 0.0;
 	// Inverted lens: the drop shows the scene around it, flipped and blurred.
 	vec2 offs = -w.xy * vec2(0.025, 0.035) * mask;
-#if CURRENT_RENDERER == RENDERER_COMPATIBILITY
-	// Compatibility (GLES3 / WebGL 2) has no screen-texture mipmaps (higher levels
-	// read black): sample level 0 and blur the haze with a few taps instead.
+#if CURRENT_RENDERER != RENDERER_FORWARD_PLUS
+	// Compatibility (GLES3 / WebGL 2) and Mobile have no screen-texture mipmaps (higher
+	// levels read black, drops turn into dark specks): sample level 0 and blur the haze
+	// with a few taps instead.
 	vec3 seen = textureLod(screen_tex, SCREEN_UV + offs, 0.0).rgb;
 	vec2 r = vec2(0.012, 0.02);
 	vec3 haze = (textureLod(screen_tex, SCREEN_UV + vec2(r.x, 0.0), 0.0).rgb
@@ -103,8 +104,18 @@ void fragment() {
 	vec3 haze = textureLod(screen_tex, SCREEN_UV, 3.5).rgb;
 #endif
 	float rim = pow(clamp(length(w.xy), 0.0, 1.0), 4.0) * mask;
-	vec3 col = seen * 1.15 + haze * 0.35 + interior_glow * (0.5 + rim * 3.0);
 	float film_a = film * (0.4 + rain);
+#if CURRENT_RENDERER == RENDERER_COMPATIBILITY
+	// GLES3 hands this pass the picture already tone-mapped and tone-maps the pass again,
+	// so a copy comes out much darker: opaque drops read as dark specks on the haze.
+	// Here the drops are faint lenses instead: what they show is lifted and only partly
+	// blended in, so they glint over the lights and all but vanish over the dark haze.
+	vec3 col = seen * 1.8 + haze * 0.4 + interior_glow * (0.5 + rim * 6.0) + seen * rim * 3.0;
+	ALBEDO = mix(haze * 1.6 + interior_glow, col, step(0.001, mask));
+	ALPHA = clamp(max(mask * (0.18 + 0.5 * rim), film_a * 0.5), 0.0, 1.0);
+#else
+	vec3 col = seen * 1.15 + haze * 0.35 + interior_glow * (0.5 + rim * 3.0);
 	ALBEDO = mix(haze * 1.2 + interior_glow, col, step(0.001, mask));
 	ALPHA = clamp(max(mask * 0.92, film_a), 0.0, 1.0);
+#endif
 }

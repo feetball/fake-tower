@@ -35,6 +35,7 @@ const MAX_PLAYERS := Room.MAX_PLAYERS
 const CHANNEL_RELIABLE := 0
 const CHANNEL_OWN := 1
 const ENET_CHANNELS := 4 ## Voice uses channel 2
+const WS_HANDSHAKE_TIMEOUT_SEC := 20.0 ## client; Godot's default is 3 s
 ## ENet slots beyond MAX_PLAYERS so a full or running room can still refuse politely.
 const MAX_CLIENTS := 15
 const RATE_WINDOW_MS := 1000
@@ -179,6 +180,9 @@ func join_game(player_name: String, address: String, port: int = DEFAULT_PORT, t
 		peer = enet
 	else:
 		var ws := WebSocketMultiplayerPeer.new()
+		# The default 3 s is too short for a page still compiling shaders on its first
+		# frames (phones, software WebGL): the handshake completes, but is only polled late.
+		ws.handshake_timeout = WS_HANDSHAKE_TIMEOUT_SEC
 		err = ws.create_client(target)
 		peer = ws
 	if err != OK:

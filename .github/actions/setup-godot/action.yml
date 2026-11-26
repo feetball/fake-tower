@@ -1,13 +1,14 @@
 name: Setup Godot
 description: >
-  Install Godot 4.5.1 (linux x86_64, official build) as `godot` on PATH, with the download
-  cached and verified against a pinned SHA-256. Optionally installs the release export
-  templates (the Windows and Linux release templates, plus any `extra-templates`) and the
+  Install Godot 4.5.1 (official build: linux x86_64 on Linux runners, the universal app on
+  macOS runners) as `godot` on PATH (and $GODOT), with the download cached and verified
+  against a pinned SHA-256. Optionally installs the release export templates (the Windows
+  and Linux release templates, plus any `extra-templates`; Linux runners only) and the
   project import cache.
 
 inputs:
   templates:
-    description: Install the Windows and Linux release export templates
+    description: Install the Windows and Linux release export templates (Linux runners only)
     default: 'false'
   extra-templates:
     description: >
@@ -30,6 +31,8 @@ runs:
           echo "GODOT_BASE_URL=https://github.com/godotengine/godot-builds/releases/download/4.5.1-stable"
           echo "GODOT_ZIP=Godot_v4.5.1-stable_linux.x86_64.zip"
           echo "GODOT_ZIP_SHA256=02ec53d1cc7dbb9cc6355393c61b9ab43d1244751a124f10248a4802830788cd"
+          echo "GODOT_MAC_ZIP=Godot_v4.5.1-stable_macos.universal.zip"
+          echo "GODOT_MAC_ZIP_SHA256=65c27959d02aaacfc131ec7ecb90179ba8045200cb02982bf2be96d117010b8a"
           echo "GODOT_TPZ=Godot_v4.5.1-stable_export_templates.tpz"
           echo "GODOT_TPZ_SHA256=1998af37f1387684e2c211cdb483daf492fc64dc6b12096bddcdca25b6910c86"
         } >> "$GITHUB_ENV"
@@ -39,10 +42,10 @@ runs:
       uses: actions/cache@v4
       with:
         path: ~/godot-bin
-        key: godot-4.5.1-stable-linux-x86_64-v1
+        key: godot-4.5.1-stable-${{ runner.os }}-${{ runner.os == 'macOS' && 'universal' || 'x86_64' }}-v1
 
-    - name: Download and verify Godot
-      if: steps.cache-godot.outputs.cache-hit != 'true'
+    - name: Download and verify Godot (Linux)
+      if: runner.os == 'Linux' && steps.cache-godot.outputs.cache-hit != 'true'
       shell: bash
       run: |
         set -euo pipefail
@@ -54,6 +57,20 @@ runs:
         mv ~/godot-bin/Godot_v4.5.1-stable_linux.x86_64 ~/godot-bin/godot
         rm -rf "$tmp"
 
+    - name: Download and verify Godot (macOS)
+      if: runner.os == 'macOS' && steps.cache-godot.outputs.cache-hit != 'true'
+      shell: bash
+      run: |
+        set -euo pipefail
+        tmp="$(mktemp -d)"
+        curl -sSL --fail --retry 3 -o "$tmp/godot.zip" "$GODOT_BASE_URL/$GODOT_MAC_ZIP"
+        echo "$GODOT_MAC_ZIP_SHA256  $tmp/godot.zip" | shasum -a 256 -c -
+        mkdir -p ~/godot-bin
+        # ditto keeps the app bundle's symlinks, permissions and signature intact.
+        ditto -x -k "$tmp/godot.zip" ~/godot-bin
+        printf '#!/bin/bash\nexec "%s/godot-bin/Godot.app/Contents/MacOS/Godot" "$@"\n' "$HOME" > ~/godot-bin/godot
+        rm -rf "$tmp"
+
     - name: Put godot on PATH
       shell: bash
       run: |
@@ -61,6 +78,13 @@ runs:
         echo "$HOME/godot-bin" >> "$GITHUB_PATH"
         echo "GODOT=$HOME/godot-bin/godot" >> "$GITHUB_ENV"
         ~/godot-bin/godot --version
+
+    - name: Check templates are supported here
+      if: inputs.templates == 'true' && runner.os != 'Linux'
+      shell: bash
+      run: |
+        echo "setup-godot: export templates are only installed on Linux runners (export there, run/build elsewhere)" >&2
+        exit 1
 
     - name: Cache export templates
       id: cache-templates

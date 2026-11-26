@@ -25,12 +25,44 @@ func _ready() -> void:
 	for a in OS.get_cmdline_user_args():
 		if a.begins_with("--sim="):
 			mode = a.trim_prefix("--sim=")
+	await _menu_fits()
 	if mode == "controller":
 		await _controller()
 	else:
 		await _pilot()
 	print("SUMMARY touch_sim %s: %d passed, %d failed" % [mode, _passes, _fails])
 	get_tree().quit(0 if _fails == 0 else 1)
+
+
+# --- main menu -----------------------------------------------------------------
+
+## With the touch-sized items and the join form open, the whole menu column (down to
+## its last item) stays on the 1080-high canvas.
+func _menu_fits() -> void:
+	var panel := _find(get_tree().root, "MainMenuPanel") as MainMenuPanel
+	if panel == null:
+		panel = _find_class_main_menu(get_tree().root)
+	_check("main menu panel present", panel != null)
+	if panel == null:
+		return
+	panel.open_join_form()
+	await _frames(3)
+	var items: Array = panel.get(&"_items")
+	var last := items[items.size() - 1] as Button
+	var bottom := last.get_global_rect().end.y
+	var h := get_viewport().get_visible_rect().size.y
+	_check("menu with the join form open fits: last item '%s' ends at %.0f of %.0f" % [last.text, bottom, h],
+		bottom <= h - 8.0)
+
+
+func _find_class_main_menu(n: Node) -> MainMenuPanel:
+	if n is MainMenuPanel:
+		return n as MainMenuPanel
+	for c in n.get_children():
+		var r := _find_class_main_menu(c)
+		if r != null:
+			return r
+	return null
 
 
 # --- pilot ---------------------------------------------------------------------

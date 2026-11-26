@@ -22,6 +22,7 @@
 #   macos    Fake Tower.app (universal, ad-hoc signed)   android  FakeTower.apk
 #   ios      FakeTower.xcodeproj + FakeTower/ (sources and the .pck)
 #   (+ DIR/fake-tower-<target>.zip with --zip). Default DIR: <repo>/build/dist.
+#   Web, Android and iOS get the 2k texture sets at 1k (env MOBILE_TEXTURE_LIMIT, see below).
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 GAME="$(cd "$HERE/.." && pwd)"
@@ -66,7 +67,9 @@ readme() { # platform
   and open index.html over HTTPS (browsers only allow the microphone on HTTPS or localhost).
   Locally: python3 -m http.server in this folder, then http://localhost:8000/ .
   Demo modes take the launch arguments from the URL: index.html?demo=pilot or ?demo=controller."
-      host="  A browser cannot host: join a game hosted on a PC or a dedicated server." ;;
+      host="  A browser cannot host: join a PC host or a dedicated server over WebSocket (TCP 27271):
+  type the server address (port box 27271), or wss://server when this page is on https.
+  A link joins directly: index.html?join=wss://server&name=Ann . Server setup: game/SERVER.md." ;;
     android) run="Install FakeTower.apk (allow installs from this source), start it, allow the microphone." ;;
     ios) run="Open FakeTower.xcodeproj on a Mac with Xcode, pick your signing team, build and run on the device." ;;
   esac
@@ -107,7 +110,48 @@ PRESETS_BACKUP=""
 restore_presets() {
   if [ -n "$PRESETS_BACKUP" ] && [ -f "$PRESETS_BACKUP" ]; then mv -f "$PRESETS_BACKUP" "$PRESETS"; fi
 }
-trap restore_presets EXIT
+
+# Web, Android and iOS ship the 2k PBR texture sets (assets/textures/*/*_2k.jpg) at 1k: a
+# quarter of the download and of the GPU memory. Godot has no per-preset texture size, so
+# the import option process/size_limit is set to MOBILE_TEXTURE_LIMIT in the .import files,
+# the project is re-imported, and after those exports the .import files are put back and
+# re-imported at full size (also on failure), so desktop exports keep 2k.
+# MOBILE_TEXTURE_LIMIT=0 turns this off.
+MOBILE_TEXTURE_LIMIT="${MOBILE_TEXTURE_LIMIT:-1024}"
+TEX_BACKUP=""
+reimport() { # log
+  "$GODOT" --headless --path "$GAME" --import 2>&1 | sed 's/\x1b\[[0-9;]*m//g' >"$1" || true
+  if grep -qE 'ERROR:|SCRIPT ERROR' "$1"; then echo "export_build: re-import logged errors, see $1" >&2; return 1; fi
+}
+limit_textures() {
+  [ -z "$TEX_BACKUP" ] && [ "$MOBILE_TEXTURE_LIMIT" != 0 ] || return 0
+  TEX_BACKUP="$(mktemp -d)"
+  local f n=0
+  for f in "$GAME"/assets/textures/*/*_2k.jpg.import; do
+    [ -f "$f" ] || continue
+    mkdir -p "$TEX_BACKUP/$(dirname "${f#"$GAME"/}")"
+    cp -p "$f" "$TEX_BACKUP/${f#"$GAME"/}"
+    sed -i "s/^process\/size_limit=.*/process\/size_limit=$MOBILE_TEXTURE_LIMIT/" "$f"
+    n=$((n + 1))
+  done
+  echo "== textures: re-importing $n 2k texture(s) at ${MOBILE_TEXTURE_LIMIT}px for web/mobile"
+  reimport "$OUT/import-lowres.log"
+}
+restore_textures() {
+  [ -n "$TEX_BACKUP" ] || return 0
+  (cd "$TEX_BACKUP" && find . -type f -name '*.import' -print0) | while IFS= read -r -d '' f; do
+    cp -p "$TEX_BACKUP/$f" "$GAME/$f"
+  done
+  rm -rf "$TEX_BACKUP"
+  TEX_BACKUP=""
+  echo "== textures: restoring full-size imports"
+  reimport "$OUT/import-restore.log"
+}
+cleanup() {
+  restore_presets
+  restore_textures || echo "export_build: WARNING: run 'godot --headless --path game --import' to restore 2k textures" >&2
+}
+trap cleanup EXIT
 
 prepare() { # target -> sets preset, bin, extra, mode
   mode=--export-release
@@ -150,6 +194,10 @@ prepare() { # target -> sets preset, bin, extra, mode
 }
 
 for plat in "${TARGETS[@]}"; do
+  case "$plat" in
+    web | android | ios) limit_textures ;;
+    *) restore_textures ;;
+  esac
   prepare "$plat"
   dir="$OUT/fake-tower-$plat"
   rm -rf "$dir" "$OUT/fake-tower-$plat.zip"

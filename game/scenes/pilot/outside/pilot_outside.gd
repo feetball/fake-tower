@@ -18,8 +18,11 @@ const AIRFIELD_INTENSITY := 2.6
 ## the depth fog takes over, and the colour of that fog below / inside the cloud
 ## (standing in for the medium lit by the town glow and by the aircraft's own lights).
 const FALLBACK_FOG_GAIN := 1.0
-const FALLBACK_FOG_CLEAR := Color(0.055, 0.053, 0.055)
-const FALLBACK_FOG_CLOUD := Color(0.12, 0.12, 0.125)
+const FALLBACK_FOG_CLEAR := Color(0.13, 0.125, 0.12)
+const FALLBACK_FOG_CLOUD := Color(0.15, 0.16, 0.18)
+## ... and how much stronger the airfield lamps' halos and aureoles are under Compatibility.
+const FALLBACK_HALO_GAIN := 1.8
+const FALLBACK_AUREOLE_GAIN := 4.0
 
 var world_root: Node3D
 var env: Environment
@@ -124,6 +127,11 @@ func set_eye(eye: Vector3) -> void:
 	_update_fog()
 
 
+## Eye height above the field in feet (as of the last set_eye).
+func eye_height_ft() -> float:
+	return _eye_h_ft
+
+
 ## Extinction per metre of the air around the eye (drives the landing-light shafts).
 func scatter_at_eye() -> float:
 	return weather.sigma_at(maxf(_eye_h_ft, 0.0))
@@ -209,6 +217,14 @@ func _collect_airport_lights() -> void:
 		lp.min_core_angle = 0.0019
 		lp.aureole_gain = 0.002
 		lp.aureole_angle = 0.011
+		if RenderCaps.is_compatibility():
+			# No volumetric medium to glow in, and GLES3 tone-maps each additive layer on
+			# its own (faint halos vanish): wider, stronger scattering halos and aureoles
+			# carry the "lamps in fog" look on the web.
+			lp.halo_gain *= FALLBACK_HALO_GAIN
+			lp.min_halo_angle = 0.028
+			lp.aureole_gain = 0.002 * FALLBACK_AUREOLE_GAIN
+			lp.aureole_angle = 0.016
 	_last_sigma = -1.0
 
 

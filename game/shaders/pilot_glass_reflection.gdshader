@@ -12,8 +12,16 @@ void fragment() {
 	vec2 e = min(UV, 1.0 - UV);
 	float edge = smoothstep(0.0, 0.06, min(e.x, e.y));
 #if CURRENT_RENDERER == RENDERER_COMPATIBILITY
-	// The display viewport has no mipmaps; GLES3 reads higher levels as black.
-	ALBEDO = textureLod(screen_tex, UV, 0.0).rgb * strength * edge;
+	// The display viewport has no mipmaps (GLES3 reads higher levels as black), and a
+	// sharp level 0 shows up as a bright green patch over the glareshield: blur it with a
+	// wide 4x4 box instead, as the mip level 3 does elsewhere, and keep it fainter.
+	vec3 acc = vec3(0.0);
+	for (int j = 0; j < 4; j++) {
+		for (int i = 0; i < 4; i++) {
+			acc += textureLod(screen_tex, UV + (vec2(float(i), float(j)) - 1.5) * 0.06, 0.0).rgb;
+		}
+	}
+	ALBEDO = acc / 16.0 * strength * 0.6 * edge;
 #else
 	ALBEDO = textureLod(screen_tex, UV, 3.0).rgb * strength * edge;
 #endif

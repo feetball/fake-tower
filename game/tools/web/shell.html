@@ -119,7 +119,7 @@ const engine = new Engine(GODOT_CONFIG);
 // The session's own keys (demo, join, name, port, ...) are read from the URL by
 // core/net/launch_args.gd. The views read theirs from the command line, so the keys
 // below are passed as user args after "--" (a key without a value is a flag).
-const FT_ARG_KEYS = /^(ui-demo|ui-radio|quality|pilot-[a-z0-9-]+|ctrl-[a-z0-9-]+)$/;
+const FT_ARG_KEYS = /^(ui-demo|ui-radio|quality|debug-state|touch|no-touch|pilot-[a-z0-9-]+|ctrl-[a-z0-9-]+)$/;
 function ftQueryArgs() {
 	const out = [];
 	new URLSearchParams(window.location.search).forEach((value, key) => {

@@ -90,6 +90,12 @@ func _put_packet_script(buffer: PackedByteArray) -> Error:
 		var p: MultiplayerPeer = _owner.get(_target)
 		if p == null:
 			return ERR_INVALID_PARAMETER
+		# A WebSocket that is already closing (its peer_disconnected is still to come, e.g.
+		# when several browsers leave at once) refuses sends with an engine error: drop quietly.
+		if p is WebSocketMultiplayerPeer:
+			var ws := (p as WebSocketMultiplayerPeer).get_peer(_target)
+			if ws == null or ws.get_ready_state() != WebSocketPeer.STATE_OPEN:
+				return ERR_UNAVAILABLE
 		return _put(p, _target, buffer)
 	# 0 = everyone, -id = everyone but id: each transport applies the same rule to its own peers.
 	var err := OK

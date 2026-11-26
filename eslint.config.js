@@ -5,7 +5,7 @@ import tseslint from 'typescript-eslint';
 import prettier from 'eslint-config-prettier';
 
 export default tseslint.config(
-  { ignores: ['dist/**', 'coverage/**', 'node_modules/**', 'e2e/screenshots/**'] },
+  { ignores: ['dist/**', 'build/**', 'coverage/**', 'node_modules/**', 'e2e/screenshots/**'] },
   js.configs.recommended,
   {
     files: ['src/**/*.ts', 'vite.config.ts', 'vitest.config.ts'],

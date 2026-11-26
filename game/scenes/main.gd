@@ -56,6 +56,9 @@ func _ready() -> void:
 	_end.visible = false
 	_fade.color = Color(0, 0, 0, 1)
 
+	if DebugState.wanted():
+		add_child(DebugState.new())
+
 	var demo_screen := _user_arg("--ui-demo=")
 	if demo_screen != "":
 		_start_ui_demo(demo_screen)

@@ -1,0 +1,61 @@
+name: Pages
+
+# Optional: publishes the web build of the game to GitHub Pages on every push to main.
+# Off until the repository owner opts in:
+#   1. Settings > Pages > Build and deployment > Source: GitHub Actions
+#   2. Settings > Secrets and variables > Actions > Variables: ENABLE_PAGES = true
+# Until then every job is skipped (the workflow is a no-op).
+# The page is served over https, so players there join a dedicated server through
+# wss:// (TLS proxy in front of it, see game/SERVER.md), e.g.
+#   https://<owner>.github.io/<repo>/?join=wss://tower.example.org&name=Ann
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build web export
+    if: vars.ENABLE_PAGES == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-godot
+        with:
+          templates: 'true'
+          extra-templates: web_nothreads_release.zip
+          import: 'true'
+      - name: Export web build
+        run: |
+          game/tools/export_build.sh web --out "$RUNNER_TEMP/dist"
+          # Pages refuses files over 100 MB.
+          big="$(find "$RUNNER_TEMP/dist/fake-tower-web" -type f -size +95M)"
+          if [ -n "$big" ]; then echo "Files too large for GitHub Pages: $big" >&2; exit 1; fi
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: ${{ runner.temp }}/dist/fake-tower-web
+
+  deploy:
+    name: Deploy to GitHub Pages
+    needs: build
+    if: vars.ENABLE_PAGES == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

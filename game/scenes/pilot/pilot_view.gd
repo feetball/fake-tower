@@ -92,6 +92,7 @@ func _process(delta: float) -> void:
 	var wet := 0.22 + 0.78 * cloud
 	cockpit.windshield.set_conditions(wet, bus.ias)
 	cockpit.windshield.update_view(aircraft.global_basis, delta)
+	ext_lights.height_m = outside.eye_height_ft() * World.FT_TO_M
 	ext_lights.set_conditions(outside.scatter_at_eye(), cloud, flight.gs * 0.5144)
 	audio.wetness = wet
 	ext_lights.gear_down = bus.gear_pos > 0.5
@@ -155,6 +156,16 @@ func _assign_layers(n: Node) -> void:
 		for l in ext_lights.get_children():
 			if l is Light3D:
 				(l as Light3D).light_cull_mask = ~(1 << (COCKPIT_LAYER - 1))
+		# Nor the world's lights: the aerodrome beacon's sweeping green/white spots
+		# otherwise wash the glareshield every few seconds (no shadows through the hull).
+		_exclude_cockpit.call_deferred(outside)
+
+
+func _exclude_cockpit(n: Node) -> void:
+	if n is Light3D:
+		(n as Light3D).light_cull_mask &= ~(1 << (COCKPIT_LAYER - 1))
+	for c in n.get_children():
+		_exclude_cockpit(c)
 
 
 ## Touch devices: on-screen view / EFB / autopilot controls (scenes/pilot/touch),

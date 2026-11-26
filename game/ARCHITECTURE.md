@@ -23,7 +23,8 @@ game/
     hud/                 radio_hud.tscn — PTT, radio state, role banner (shared overlay)
     end/                 end_screen.tscn
   assets/      CC0 textures/HDRIs/models/sounds + LICENSES.md + CATALOG.md
-  tests/       headless tests (run_tests.gd, voice_test.gd, net_test.sh, ws_net_test.sh, smoke_test.sh)
+  tests/       headless tests (run_tests.gd, voice_test.gd, net_test.sh, ws_net_test.sh, smoke_test.sh),
+               web/web_test.mjs (Playwright tests of the web export)
   tools/       shot.sh (off-screen screenshot), export scripts
 ```
 
@@ -193,7 +194,9 @@ leader starts once min-players are in) for scripted multi-instance tests;
 `--server` [`--autostart-at=<n>`] [`--lobby-after=<sec>`] for the dedicated server
 (SERVER.md; an export with the `dedicated_server` feature tag runs as one too);
 `--net-test`, `--time-scale=<k>` (net tests only); `--shot=<png>`
-`--shot-after=<sec>` (core/shot_helper.gd). On the web the page URL's query string
+`--shot-after=<sec>` (core/shot_helper.gd); `--debug-state` publishes a compact state
+snapshot for browser tests (core/debug_state.gd: `window.ftState` on the web, `[ft-state]`
+lines on stdout). On the web the page URL's query string
 is read as well, e.g. `?demo=pilot&name=X&join=wss://host`; only `demo`, `join`,
 `name`, `port`, `ws-port`, `autostart`, `min-players` are honoured there
 (core/net/launch_args.gd, `LaunchArgs.current()`).
@@ -261,7 +264,12 @@ Quality tier: `--quality=low|medium|high` (or `--pilot-quality=`) overrides the
 default. On the web the page URL carries launch args: session keys via
 `core/net/launch_args.gd`, view/debug keys (`pilot-*`, `ctrl-*`, `ui-*`,
 `quality`) via the HTML shell `tools/web/shell.html`. Exports: `tools/export_build.sh
-<windows|linux|web|macos|android|ios>`.
+<windows|linux|web|macos|android|ios>`; web, Android and iOS ship the 2k texture sets at
+1k (the script re-imports with `process/size_limit` for those exports and restores after).
+Compatibility tone-maps each additive layer on its own, so faint glows vanish there: the
+pilot view compensates with brighter fallback fog, stronger lamp halos, a depth-tested
+landing-light glow sprite (all `RenderCaps.is_compatibility()` / no volumetric fog), and
+world lights never light the flight deck layer (the aerodrome beacon used to wash it green).
 
 ## Visual direction
 

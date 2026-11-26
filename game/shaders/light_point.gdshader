@@ -121,6 +121,13 @@ void fragment() {
 	}
 	vec2 ndc = v_center_clip.xy / v_center_clip.w;
 	float vis = 1.0;
+#if CURRENT_RENDERER == RENDERER_COMPATIBILITY
+	// A lamp just off the bottom of the screen (under the nose) would skip the test and
+	// spread its halo over the instrument panel: test it at the nearest screen edge.
+	if (abs(ndc.x) < 1.6 && abs(ndc.y) < 1.6) {
+		ndc = clamp(ndc, vec2(-0.995), vec2(0.995));
+	}
+#endif
 	if (all(lessThan(abs(ndc), vec2(1.0)))) {
 		float depth = textureLod(depth_tex, ndc * 0.5 + 0.5, 0.0).r;
 #if CURRENT_RENDERER == RENDERER_COMPATIBILITY
@@ -136,6 +143,13 @@ void fragment() {
 		bias += abs(v_center_z) * 0.25;
 #endif
 		vis = smoothstep(bias, 0.0, scene_z - v_center_z);
+#if CURRENT_RENDERER == RENDERER_COMPATIBILITY
+		// That bias must not let near geometry through: a lamp behind the flight deck
+		// (a few metres away) would draw its halo over the instrument panel.
+		if (-scene_z < 12.0 && -v_center_z > 24.0) {
+			vis = 0.0;
+		}
+#endif
 	}
 	if (vis <= 0.0) {
 		discard;
