@@ -4,6 +4,7 @@ extends Node3D
 ## pedestal), smooth mouse-look while the right mouse button is held, and small
 ## head motion from turbulence, bank changes and touchdown jolts.
 ## Keys 1 / 2 / 3 snap between the framings; the wheel over empty space zooms.
+## Touch drag / pinch / double-tap call look_by / zoom_by / reset_look.
 
 signal view_changed(view_name: String)
 
@@ -93,9 +94,7 @@ func _unhandled_input(event: InputEvent) -> void:
 			_zoom = clampf(_zoom * (0.88 if mb.button_index == MOUSE_BUTTON_WHEEL_UP else 1.0 / 0.88), 0.35, 1.0)
 			get_viewport().set_input_as_handled()
 	elif event is InputEventMouseMotion and _looking:
-		var mm := event as InputEventMouseMotion
-		_look_yaw = clampf(_look_yaw - mm.relative.x * MOUSE_DEG_PER_PX, -LOOK_YAW_LIMIT - _target_yaw, LOOK_YAW_LIMIT - _target_yaw)
-		_look_pitch = clampf(_look_pitch - mm.relative.y * MOUSE_DEG_PER_PX, LOOK_PITCH_DOWN - _target_pitch, LOOK_PITCH_UP - _target_pitch)
+		look_by((event as InputEventMouseMotion).relative * MOUSE_DEG_PER_PX)
 		get_viewport().set_input_as_handled()
 	elif event is InputEventKey and event.is_pressed() and not event.is_echo():
 		var k := (event as InputEventKey).keycode
@@ -103,6 +102,26 @@ func _unhandled_input(event: InputEvent) -> void:
 		if map.has(k):
 			set_view(map[k])
 			get_viewport().set_input_as_handled()
+
+
+## Turn the head by `deg` (x = yaw, y = pitch; positive = right / down, like
+## a mouse moving right / down), within the look limits. Used by mouse-look and
+## the touch drag (PilotInteraction).
+func look_by(deg: Vector2) -> void:
+	_look_yaw = clampf(_look_yaw - deg.x, -LOOK_YAW_LIMIT - _target_yaw, LOOK_YAW_LIMIT - _target_yaw)
+	_look_pitch = clampf(_look_pitch - deg.y, LOOK_PITCH_DOWN - _target_pitch, LOOK_PITCH_UP - _target_pitch)
+
+
+## Multiply the zoom (field-of-view factor, 0.35..1); < 1 zooms in. Pinch zoom.
+func zoom_by(f: float) -> void:
+	_zoom = clampf(_zoom * f, 0.35, 1.0)
+
+
+## Back to the current framing's straight-ahead look, no zoom (touch double-tap).
+func reset_look() -> void:
+	_look_yaw = 0.0
+	_look_pitch = 0.0
+	_zoom = 1.0
 
 
 ## Called every frame by the view with the current bank (deg) for head motion.

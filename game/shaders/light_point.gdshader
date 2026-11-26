@@ -123,6 +123,9 @@ void fragment() {
 	float vis = 1.0;
 	if (all(lessThan(abs(ndc), vec2(1.0)))) {
 		float depth = textureLod(depth_tex, ndc * 0.5 + 0.5, 0.0).r;
+#if CURRENT_RENDERER == RENDERER_COMPATIBILITY
+		depth = depth * 2.0 - 1.0; // OpenGL NDC z is -1..1 (Vulkan: 0..1, used as is)
+#endif
 		vec4 scene = INV_PROJECTION_MATRIX * vec4(ndc, depth, 1.0);
 		float scene_z = scene.z / scene.w;
 		float bias = occlusion_bias_m + abs(v_center_z) * 0.002;

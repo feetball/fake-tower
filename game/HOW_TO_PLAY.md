@@ -15,6 +15,7 @@ Contents
 7. [Playing the impostor](#7-playing-the-impostor)
 8. [The end screen](#8-the-end-screen)
 9. [Reference: the airport](#9-reference-the-airport)
+10. [Touch controls (phones and tablets)](#10-touch-controls-phones-and-tablets)
 
 ---
 
@@ -48,7 +49,7 @@ Everyone knows which two players are controllers. Only the two controllers know 
 | **How to Play** | The rules and controls overlay. Esc closes it. |
 | **Settings** | Master volume, fullscreen, leave game, quit. |
 
-Enter your name first (up to 16 characters). Esc opens Settings at any time, including during a round. **The game does not pause.**
+Enter your name first (up to 16 characters). Esc opens Settings at any time, including during a round. **The game does not pause.** On a touchscreen, the **MENU** button (top right) opens Settings instead; see section 10.
 
 **Hosting**
 
@@ -72,7 +73,7 @@ There is one frequency, **APP 119.850**, shown in the strip across the top of th
 
 | What | How |
 | --- | --- |
-| Transmit | Hold **Space**, or hold the **PTT** button in the top strip with the mouse. Release to stop. |
+| Transmit | Hold **Space**, or hold the **PTT** button in the top strip with the mouse. Release to stop. On a touchscreen, hold the big **PTT** button in the bottom-right corner. |
 | One person transmitting | Everyone hears them through a radio filter. |
 | Two or more transmitting at once | The frequency is **BLOCKED**. Everyone hears a squeal and nobody hears speech. The strip shows BLOCKED in red. |
 | Crashed pilot | Cannot transmit. The strip shows RADIO DEAD if you try. |
@@ -584,3 +585,59 @@ Everywhere else the ground is at 512 ft.
 | GPWS | TERRAIN within 30 s of impact, PULL UP within 12 s |
 | Low fuel | under 5 minutes |
 | Radar sweep | every 2 seconds |
+
+---
+
+## 10. Touch controls (phones and tablets)
+
+On a device with a touchscreen (phones and tablets in landscape, touch browsers) the game shows on-screen controls, and everything above can be done without a keyboard. On a computer without a touchscreen nothing changes. The buttons are sized for a finger (about 9 mm on a 6-inch phone) and keep clear of notches and rounded corners.
+
+You can use two hands at once: holding **PTT** with one thumb does not stop the other hand from turning knobs, dragging the view or pressing buttons.
+
+**Everywhere**
+
+| Touch | What it does |
+| --- | --- |
+| Hold **PTT** (bottom right, during a round) | Push-to-talk. Release to stop. It shows TX, RECEIVING, BLOCKED or RADIO DEAD. |
+| **MENU** (top right; in the top strip during a round) | Settings: volume, fullscreen, leave game, quit. Same as Esc. |
+| Tap a text field | Opens the on-screen keyboard. The screen slides up so the field stays visible. |
+
+**Pilot**
+
+| Touch | What it does |
+| --- | --- |
+| **PANEL** / **OUTSIDE** / **PEDESTAL** (left column) | The three views (keys 1 / 2 / 3) |
+| **ATIS** / **PLATE** (left column) | Open or close that page of the tablet (I / P). Tap again to close. |
+| **MASTER WARN** (left column) | Acknowledge the warning light. It is lit while there is a warning. |
+| One-finger drag on the view | Look around |
+| Pinch | Zoom |
+| Double-tap the view | Look straight ahead again, no zoom |
+| **HDG** / **ALT** / **SPD** / **BARO** (bottom strip) | Show the selected values. Tap one to choose which one − and + change (it is lit). |
+| **−** / **+** | One step down / up. Hold to repeat in big steps (heading 10, altitude 1000, speed 10, altimeter 5). |
+| **×10** (×5 for BARO) | While lit, every tap of − / + is a big step |
+| **STD** | Altimeter to standard 1013, tap again to go back to your QNH (B) |
+| **APPR** | Arm or disarm the approach (A). The small text shows the lateral mode (HDG, LOC, APP). |
+| **GEAR** (right column) | Gear up or down (G). Shows UP, TRANS or DOWN. |
+| **FLAPS UP** / **FLAPS DN** (right column) | Flaps one step up / down (Shift+F / F). The small text shows the current setting. |
+| Tap a cockpit control | Same as a click: APPR button, baro knob (STD), gear lever, flap lever and gates, master warning |
+| Drag a cockpit knob | Turns it: right or up increases |
+
+A value shown in amber in the strip has been sent and is waiting for the aircraft to confirm it.
+
+**Controller**
+
+| Touch | What it does |
+| --- | --- |
+| One-finger drag on the scope | Pan |
+| Pinch | Zoom |
+| Tap a target or its data block | Select it (empty scope: deselect). Tap a button in the scope's menu bar to use it. |
+| Double-tap | Reset the view |
+| **MEASURE** (bottom bar), then drag | Range and bearing line (right-drag on a computer). Tap MEASURE again to pan again. |
+| **LAYERS** | Opens the eight map layer buttons (RR, CL, FIX, TERR, MSA, HOLD, PTL, HIST). Lit = on. |
+| **ZOOM −** / **ZOOM +** (hold repeats), **RESET** | Range and view |
+| **ROOM** | Switch between the scope and the room view (Tab) |
+| Drag off the scope | Look around the room. It springs back when you let go. |
+| With a target selected: **LDR −45°** / **+45°**, **AUTO** | Turn its data block, or back to automatic |
+| **DESEL** | Deselect and clear the measuring line |
+
+The flight data panel (tabs, traffic list, scratchpad) works with a tap, but only while no other finger is down: let go of PTT first. The scratchpad opens the on-screen keyboard. The same goes for the menus and the tablet's own tab buttons.

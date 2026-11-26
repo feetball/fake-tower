@@ -81,7 +81,6 @@ func _environment() -> void:
 	environment.set_glow_level(3, 0.9)
 	environment.set_glow_level(4, 0.7)
 	environment.set_glow_level(5, 0.4)
-	environment.volumetric_fog_enabled = true
 	environment.volumetric_fog_density = 0.018
 	environment.volumetric_fog_albedo = Color(0.8, 0.82, 0.85)
 	environment.volumetric_fog_emission = Color(0.0, 0.0, 0.0)
@@ -90,9 +89,13 @@ func _environment() -> void:
 	environment.volumetric_fog_detail_spread = 1.5
 	environment.volumetric_fog_ambient_inject = 0.0
 	environment.volumetric_fog_temporal_reprojection_enabled = true
-	environment.ssao_enabled = true
 	environment.ssao_radius = 0.6
 	environment.ssao_intensity = 1.6
+	# Forward+ only; elsewhere the room is lit by the scopes alone (no haze: depth fog
+	# over a few metres would only grey the walls).
+	environment.ssao_enabled = RenderCaps.has_ssao()
+	environment.volumetric_fog_enabled = RenderCaps.has_volumetric_fog()
+	RenderCaps.adapt_glow(environment)
 	var we := WorldEnvironment.new()
 	we.environment = environment
 	add_child(we)

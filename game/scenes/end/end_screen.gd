@@ -62,6 +62,8 @@ func _ready() -> void:
 	_wait.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_wait.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	body.add_child(UiKit.hbox(16, [_wait, _back]))
+	if TouchMode.active():
+		_back.custom_minimum_size = Vector2(260.0, TouchMode.TARGET_PX * 0.7)
 	Sess.connect_signal(&"round_ended", func(_r: Dictionary) -> void: refresh())
 
 
@@ -120,7 +122,7 @@ func refresh() -> void:
 			txt.add_theme_color_override(&"font_color", UiText.outcome_color(str(e.get("kind", ""))).lerp(UiTheme.TEXT, 0.35))
 			_timeline.add_child(UiKit.hbox(14, [t, txt]))
 
-	var host := Sess.is_host()
+	var host := Sess.can_lead()
 	_back.visible = host
 	_wait.text = "Open mic is live again." if host \
 		else "Open mic is live again. Waiting for the host to return everyone to the lobby."

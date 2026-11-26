@@ -26,6 +26,9 @@ func _ready() -> void:
 	_ui.add_child(_howto)
 	Sess.connect_signal(&"phase_changed", func(_p: String) -> void: sync())
 	Sess.connect_signal(&"lobby_changed", sync)
+	if TouchMode.active():
+		# Finger-sized rows (≈5 mm at 6": the column has no room for more).
+		TouchMode.enlarge_targets(_ui, 72.0)
 	sync()
 
 

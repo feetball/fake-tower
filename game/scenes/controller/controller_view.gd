@@ -10,6 +10,11 @@ extends Node3D
 ## --ctrl-framing=room, --ctrl-rbl, --ctrl-phr, --ctrl-scratch=<text>,
 ## --ctrl-ca-on, --ctrl-look=<yaw_deg>,<pitch_deg>, --ctrl-view=<x_nm>,<y_nm>,<range_nm>,
 ## --ctrl-layers=<key,...> (toggles, e.g. ptl)
+##
+## Touch: gestures on the scope go through touch/scope_touch.gd (per finger,
+## emulated mouse ignored); on touch devices (TouchMode) touch/ctrl_touch_bar.gd
+## adds the toolbar along the bottom and the layout keeps clear of it and of the
+## HUD's PTT button. A drag off the scope looks around the room (like RMB).
 
 const ScopeDisplay := preload("res://scenes/controller/scope/scope_display.gd")
 const SidePanel := preload("res://scenes/controller/panel/side_panel.gd")
@@ -18,6 +23,9 @@ const Room := preload("res://scenes/controller/room/room.gd")
 const AlertTones := preload("res://scenes/controller/audio/alert_tones.gd")
 const DebugTargets := preload("res://scenes/controller/debug/debug_targets.gd")
 const Fmt := preload("res://scenes/controller/scope/scope_format.gd")
+const ScopeTouch := preload("res://scenes/controller/touch/scope_touch.gd")
+const TouchBar := preload("res://scenes/controller/touch/ctrl_touch_bar.gd")
+const TOUCH_HELP := "DRAG pan · PINCH zoom · DBL-TAP reset · TAP select · MEASURE then drag · LAYERS / LDR / ROOM below"
 
 const MIN_TOP := 70.0
 const SIDE_MARGIN := 14.0
@@ -46,6 +54,10 @@ var _side_rect := Rect2()
 ## Frames the flight-data SubViewport still has to render after a change (the
 ## rebuilt rows settle their layout a frame later).
 var _panel_dirty := 0
+var _scope_touch: ScopeTouch
+var _touch_bar: TouchBar
+var _look_fingers: Dictionary = {} ## touch index -> true, fingers looking around the room
+var _touch_sig := Vector2(-1, -1) ## PTT position the touch layout was made for
 
 
 func _ready() -> void:
@@ -64,6 +76,14 @@ func _ready() -> void:
 	_panel_vp.render_target_update_mode = SubViewport.UPDATE_DISABLED
 
 	_scope_screen.texture = _scope.get_texture()
+	_scope_touch = ScopeTouch.new(_scope.input)
+	if TouchMode.active():
+		_scope.ctx.help = TOUCH_HELP
+		_touch_bar = TouchBar.new()
+		_touch_bar.scope = _scope
+		_touch_bar.camera = _camera
+		_touch_bar.scope_touch = _scope_touch
+		$Overlay.add_child(_touch_bar)
 	_room.console.rig.set_textures(_scope.get_texture(), _panel_vp.get_texture())
 
 	_scope.alerts.connect(func(kinds: PackedStringArray) -> void:
@@ -187,6 +207,12 @@ func _layout() -> void:
 		return
 	_reserved_top = _hud_top()
 	var avail := Rect2(SIDE_MARGIN, _reserved_top, view.x - SIDE_MARGIN * 2.0, view.y - _reserved_top - BOTTOM_MARGIN)
+	if _touch_bar != null:
+		_touch_bar.layout()
+		var safe := TouchMode.safe_rect(get_viewport())
+		var l := maxf(SIDE_MARGIN, safe.position.x + SIDE_MARGIN)
+		var r := minf(view.x - SIDE_MARGIN, safe.end.x - SIDE_MARGIN)
+		avail = Rect2(l, _reserved_top, r - l, view.y - _reserved_top - maxf(BOTTOM_MARGIN, _touch_bar.reserved_bottom()))
 	var lay := _camera.scope_layout(view, avail)
 	var scale := float(get_tree().root.size.y) / view.y
 	var main_r := _snap(lay["main"], scale)
@@ -208,6 +234,19 @@ func _layout() -> void:
 		glass.set_shader_parameter("aspect", Vector2(main_r.size.x / main_r.size.y, 1.0))
 
 
+## The toolbar depends on the HUD's PTT button, which appears after this view.
+func _touch_layout_stale() -> bool:
+	if _touch_bar == null:
+		return false
+	var hud := get_tree().get_first_node_in_group(&"radio_hud")
+	var ptt: Rect2 = hud.call(&"get_touch_ptt_rect") if hud != null and hud.has_method(&"get_touch_ptt_rect") else Rect2()
+	var sig := ptt.position
+	if sig == _touch_sig:
+		return false
+	_touch_sig = sig
+	return true
+
+
 ## Rect snapped to the physical pixel grid (canvas units in, canvas units out).
 func _snap(r: Rect2, scale: float) -> Rect2:
 	var p := (r.position * scale).round()
@@ -222,7 +261,7 @@ func _process(delta: float) -> void:
 	_layout_timer += delta
 	if _layout_timer > 0.5:
 		_layout_timer = 0.0
-		if not is_equal_approx(_hud_top(), _reserved_top):
+		if not is_equal_approx(_hud_top(), _reserved_top) or _touch_layout_stale():
 			_layout()
 	# Wall clock, not delta: frame deltas are clamped when rendering is very slow.
 	if _debug and not _debug_last.is_empty() \
@@ -269,7 +308,17 @@ func _move_panel(to: Node) -> void:
 # --- input -----------------------------------------------------------------
 
 func _on_scope_gui_input(e: InputEvent) -> void:
+	if e is InputEventScreenTouch or e is InputEventScreenDrag:
+		if e is InputEventScreenTouch and (e as InputEventScreenTouch).pressed:
+			get_viewport().gui_release_focus()
+		var at: Vector2 = e.get(&"position")
+		_scope_touch.handle(e, at * Vector2(_scope.size) / _scope_screen.size)
+		_scope_screen.accept_event()
+		return
 	if not e is InputEventMouse:
+		return
+	if TouchMode.is_emulated(e):
+		_scope_screen.accept_event() # fingers are handled above
 		return
 	if e is InputEventMouseButton and (e as InputEventMouseButton).pressed:
 		get_viewport().gui_release_focus()
@@ -305,9 +354,28 @@ func _input(e: InputEvent) -> void:
 
 
 func _unhandled_input(e: InputEvent) -> void:
+	if e is InputEventScreenTouch or e is InputEventScreenDrag:
+		_touch_look(e)
+		return
 	if not e is InputEventKey or _typing():
 		return
 	if _scope.input.key(e as InputEventKey):
+		get_viewport().set_input_as_handled()
+
+
+## A finger dragged anywhere but the scope / panel / toolbar looks around the
+## room; it springs back when the last such finger lifts (as with RMB).
+func _touch_look(e: InputEvent) -> void:
+	var idx: int = e.get(&"index")
+	if e is InputEventScreenTouch:
+		if (e as InputEventScreenTouch).pressed:
+			_look_fingers[idx] = true
+		elif _look_fingers.erase(idx) and _look_fingers.is_empty():
+			_camera.looking = false
+		get_viewport().set_input_as_handled()
+	elif _look_fingers.has(idx):
+		_camera.looking = true
+		_camera.look_by(-(e as InputEventScreenDrag).relative)
 		get_viewport().set_input_as_handled()
 
 

@@ -55,7 +55,10 @@ func _ready() -> void:
 	_fullscreen.text = "Fullscreen"
 	_fullscreen.toggled.connect(func(on: bool) -> void: UiSettings.apply_fullscreen(on))
 	body.add_child(_fullscreen)
-	body.add_child(UiKit.label("Push-to-talk: hold Space, or hold the PTT button in the radio strip.", &"Small", true))
+	var ptt_help := "Push-to-talk: hold Space, or hold the PTT button in the radio strip."
+	if TouchMode.active():
+		ptt_help = "Push-to-talk: hold the PTT button at the bottom right of the screen."
+	body.add_child(UiKit.label(ptt_help, &"Small", true))
 
 	body.add_child(UiKit.hsep())
 	_leave = UiKit.button("Leave game", &"Danger", func() -> void:

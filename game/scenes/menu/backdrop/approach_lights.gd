@@ -30,6 +30,8 @@ const STROBE := Color(0.85, 0.9, 1.0)
 var whites: LightPoints
 var reds: LightPoints
 var flashers: LightPoints
+## Glow sprites standing in for the OmniLights' volumetric fog (null on Forward+).
+var _glow: FogGlow
 
 
 func _ready() -> void:
@@ -42,6 +44,7 @@ func build() -> void:
 	whites = _make_points("White", 2.0, 0.04)
 	reds = _make_points("Red", 2.0, 0.04)
 	flashers = _make_points("Flashers", 3.0, 0.02)
+	_glow = FogGlow.create(self)
 	var stands := PackedVector3Array()
 	var n_stations := int(round(length_m / station_spacing_m))
 	var n_flash := 0
@@ -79,6 +82,8 @@ func build() -> void:
 	whites.commit()
 	reds.commit()
 	flashers.commit()
+	if _glow != null:
+		_glow.commit()
 	_build_stands(stands)
 
 
@@ -109,6 +114,8 @@ func _omni(pos: Vector3, col: Color, energy: float, rng: float) -> void:
 	l.light_volumetric_fog_energy = 40.0 * fog_glow
 	l.shadow_enabled = false
 	add_child(l)
+	if _glow != null:
+		_glow.add_light(pos, col, energy, rng, l.light_volumetric_fog_energy)
 
 
 func _build_stands(bases: PackedVector3Array) -> void:

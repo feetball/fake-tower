@@ -23,7 +23,7 @@ game/
     hud/                 radio_hud.tscn — PTT, radio state, role banner (shared overlay)
     end/                 end_screen.tscn
   assets/      CC0 textures/HDRIs/models/sounds + LICENSES.md + CATALOG.md
-  tests/       headless tests (run_tests.gd)
+  tests/       headless tests (run_tests.gd, voice_test.gd, net_test.sh, ws_net_test.sh, smoke_test.sh)
   tools/       shot.sh (off-screen screenshot), export scripts
 ```
 
@@ -54,6 +54,9 @@ Same fields as `src/shared/protocol.ts`, snake_cased.
 `atis` — `{letter, runway, qnh, wind_dir, wind_kt, visibility_m, ceiling_ft, text}`
 
 `player` (lobby) — `{id:int, name:String, host:bool, connected:bool}`
+(`host` marks the lobby leader: the player-host, or on a dedicated server the
+first-joined player. The `room` payload around the list is `{phase, players}` plus
+`dedicated: true` when the host is a dedicated server.)
 
 `round_player` — `{id:int, name, role:"controller"|"pilot", callsign:String}` (callsign "" for controllers)
 
@@ -85,7 +88,8 @@ After a crash the last state is frozen.
 
 The only thing views talk to. Host-authoritative: the host's instance runs the
 simulation; clients receive only what their role may see (pilots never receive
-radar or the impostor flag).
+radar or the impostor flag). The host is either a player (`host_game`) or a
+dedicated server that is not a player (`start_server`, `--server`, see SERVER.md).
 
 State (read-only for views):
 ```
@@ -107,6 +111,17 @@ events: Array[Dictionary]
 result: Dictionary
 round_time: float
 min_players: int
+# added for transports / dedicated server (all read-only):
+is_leader: bool          may start the round / return to the lobby (player-host, or the
+                         dedicated server's leader: first-joined, handed on when they leave)
+is_dedicated: bool       this instance is a dedicated server (is_host, not a player)
+server_dedicated: bool   client: the host we joined is a dedicated server
+transport: String        client "enet" | "ws"; host "enet+ws" (or one); "" offline
+server_address: String   client: "host:port" or the ws(s):// URL joined
+listen_port: int         host: ENet UDP port (0 = off)
+listen_ws_port: int      host: WebSocket TCP port (0 = off)
+autostart_at: int        dedicated: start when this many players are in (0 = leader starts)
+lobby_after: float       dedicated + autostart_at: seconds from round end back to lobby
 ```
 Signals:
 ```
@@ -123,11 +138,24 @@ connection_lost()
 ```
 Methods:
 ```
-host_game(player_name: String, port: int = DEFAULT_PORT) -> Error
-join_game(player_name: String, address: String, port: int = DEFAULT_PORT) -> Error
+host_game(player_name: String, port: int = DEFAULT_PORT, ws_port: int = DEFAULT_WS_PORT) -> Error
+                                     listens on ENet UDP `port` AND WebSocket TCP `ws_port`
+                                     at once (0 turns one off); ERR_UNAVAILABLE on the web
+join_game(player_name: String, address: String, port: int = DEFAULT_PORT,
+          transport_pref: String = "auto") -> Error
+                                     address: host | host:port | [v6]:port | ws://… | wss://…
+                                     (http(s):// = ws(s)://, enet://host[:port] forces ENet);
+                                     `port` applies when the address has none. A bare host
+                                     goes over ENet on desktop/mobile, WebSocket on the web
+                                     (port DEFAULT_WS_PORT while `port` is left at
+                                     DEFAULT_PORT; on an https page wss://host, i.e. a TLS
+                                     proxy on 443). transport_pref "enet" | "ws" forces one.
+                                     Parsing: core/net/address.gd (pure, unit-tested).
+start_server(port: int = DEFAULT_PORT, ws_port: int = DEFAULT_WS_PORT) -> Error
+                                     dedicated server: runs the room, is not a player
 leave() -> void                      back to "menu"
-start_round() -> void                host only
-return_to_lobby() -> void            host only
+start_round() -> void                leader only (a dedicated server's leader asks the server)
+return_to_lobby() -> void            leader only
 send_ap(changes: Dictionary) -> void pilot only
 set_ptt(on: bool) -> void
 start_demo(role: String) -> void     offline round for development and screenshots:
@@ -138,12 +166,37 @@ start_demo(role: String) -> void     offline round for development and screensho
 player_name(id: int) -> String
 callsign_of(id: int) -> String
 ```
-`DEFAULT_PORT = 27270`. Transport is ENet for now (LAN / direct IP);
-`SteamMultiplayerPeer` replaces it for release without touching views.
+`DEFAULT_PORT = 27270` (ENet, UDP), `DEFAULT_WS_PORT = 27271` (WebSocket, TCP).
 
-Command-line user args (after `--`): `--demo=<role>` starts `start_demo(role)`
-at launch; `--host`, `--join=<ip>`, `--name=<n>`, `--autostart` for scripted
-multi-instance tests; `--shot=<png>` `--shot-after=<sec>` (core/shot_helper.gd).
+Transports. Browsers can only use WebSocket and cannot listen; phones usually
+cannot accept inbound connections. So a host (player-host or dedicated server)
+listens on both at once: `core/net/multi_server_peer.gd` is a
+`MultiplayerPeerExtension` that wraps an `ENetMultiplayerPeer` server and a
+`WebSocketMultiplayerPeer` server behind the one peer SceneMultiplayer takes,
+passing peer ids through unchanged (an id clash across transports is refused), so
+`get_remote_sender_id()`, Room ids and clients' `get_unique_id()` agree. Clients
+use a plain `ENetMultiplayerPeer` or `WebSocketMultiplayerPeer`. Over WebSocket every
+channel is reliable and ordered (TCP); the RPC channels/modes are unchanged.
+`SteamMultiplayerPeer` can still replace either without touching views.
+
+Dedicated server (`start_server`): `my_id` 1, `is_host` and `is_dedicated` true,
+never in the room, so it has no role, aircraft or callsign and role assignment and
+the result only cover players. Session mirrors the room into `phase`, `players`,
+`radio_tx`, `round_players` and `result` (and emits the usual signals) so Voice's
+relay rule and the server log work. The room resets when everyone has left.
+
+Launch options. Command-line user args (after `--`): `--demo=<role>` starts
+`start_demo(role)` at launch; `--host`, `--join=<addr>` (any join_game address),
+`--name=<n>`, `--port=<p>` (ENet), `--ws-port=<p>` (default 27271, or `--port`+1
+when only `--port` is given; 0 = off), `--min-players=<n>`, `--autostart` (the
+leader starts once min-players are in) for scripted multi-instance tests;
+`--server` [`--autostart-at=<n>`] [`--lobby-after=<sec>`] for the dedicated server
+(SERVER.md; an export with the `dedicated_server` feature tag runs as one too);
+`--net-test`, `--time-scale=<k>` (net tests only); `--shot=<png>`
+`--shot-after=<sec>` (core/shot_helper.gd). On the web the page URL's query string
+is read as well, e.g. `?demo=pilot&name=X&join=wss://host`; only `demo`, `join`,
+`name`, `port`, `ws-port`, `autostart`, `min-players` are honoured there
+(core/net/launch_args.gd, `LaunchArgs.current()`).
 
 ## Autoload `Voice` (voice/voice.gd)
 
@@ -154,7 +207,21 @@ mic_ok: bool
 set_volume(v: float) -> void          0..1
 input_level: float                    0..1, for a mic meter
 signal status_changed()
+# added:
+mic_state: String                     why the mic is (not) working: "ok" | "idle" | "starting" |
+                                      "asking" | "denied" | "no_signal" | "no_signal_web" |
+                                      "insecure" | "no_device" | "disabled" | "server"
+mic_status: String                    the matching one-line text for the UI
+rx_counts: Dictionary                 voice packets received per sender id (diagnostics/tests)
+debug_send_tone(n: int) -> void       test hook: n tone packets through the normal send path
 ```
+Capture never blocks play: with no device, input disabled, a denied permission, a
+non-secure web page or no signal, `mic_ok` stays false and the player listens
+only. Android asks for `RECORD_AUDIO` and iOS 17+ for record permission
+(`OS.request_permission`) when capture first starts (entering the lobby); the
+browser asks by itself on the first capture (getUserMedia, https or localhost
+only). All Voice players use stream playback (web exports default to sample
+playback, which bypasses bus effects). On a dedicated server Voice only relays.
 Lobby/ended = open mic, clean. Playing = one VHF frequency, PTT, radio DSP,
 squelch, heterodyne squeal when blocked (`Session.radio_tx.size() >= 2`).
 

@@ -12,6 +12,7 @@ const SUITES: Array[String] = [
 	"res://tests/test_regression.gd",
 	"res://tests/test_parity.gd",
 	"res://tests/test_demo.gd",
+	"res://tests/test_net.gd",
 ]
 
 

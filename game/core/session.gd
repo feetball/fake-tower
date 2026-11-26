@@ -1,16 +1,22 @@
 extends Node
 ## The `Session` autoload: the only thing views talk to (contract in ARCHITECTURE.md).
-## Host-authoritative over Godot high-level multiplayer (ENet). The host runs a
-## Room (core/net/room.gd) with the simulation; every peer, the host included,
-## receives only its own messages through _deliver(), so the host's views see
-## exactly what a client would. Clients are untrusted: every RPC they can call
-## re-validates sender, phase, role and argument types.
+## Host-authoritative over Godot high-level multiplayer. The host runs a Room
+## (core/net/room.gd) with the simulation; every peer, the host included, receives
+## only its own messages through _deliver(), so the host's views see exactly what a
+## client would. Clients are untrusted: every RPC they can call re-validates sender,
+## phase, role and argument types.
+## Transports: a host listens on ENet (UDP) and WebSocket (TCP) at once through
+## core/net/multi_server_peer.gd; a client joins over one of them (core/net/address.gd).
+## A dedicated server (start_server, `--server`) runs the room without being a player;
+## its first-joined player is the lobby leader.
 
 const Room := preload("res://core/net/room.gd")
 const Demo := preload("res://core/net/demo.gd")
 const SimRng := preload("res://core/sim/rng.gd")
 const InputSetup := preload("res://core/net/input_setup.gd")
 const LaunchArgs := preload("res://core/net/launch_args.gd")
+const Address := preload("res://core/net/address.gd")
+const MultiServerPeer := preload("res://core/net/multi_server_peer.gd")
 
 signal lobby_changed()
 signal round_began()
@@ -23,7 +29,8 @@ signal phase_changed(phase: String)
 signal error(msg: String)
 signal connection_lost()
 
-const DEFAULT_PORT := 27270
+const DEFAULT_PORT := 27270 ## ENet, UDP
+const DEFAULT_WS_PORT := 27271 ## WebSocket, TCP
 const MAX_PLAYERS := Room.MAX_PLAYERS
 const CHANNEL_RELIABLE := 0
 const CHANNEL_OWN := 1
@@ -34,6 +41,8 @@ const RATE_WINDOW_MS := 1000
 const RATE_MAX := 120 ## messages per second per peer; excess is dropped
 const RAW_NAME_MAX := 200
 const REFUSE_KICK_SEC := 0.5
+const SERVER_SCENE := "res://core/net/server.tscn"
+const SERVER_MAX_FPS := 30 ## dedicated server frame cap (the sim runs at 10 Hz)
 
 var phase := "menu"
 var my_id := 0
@@ -54,16 +63,36 @@ var result: Dictionary = {}
 var round_time := 0.0
 var min_players := 4
 var is_demo := false
+## May start the round and return to the lobby: a player-host, or the first-joined
+## player of a dedicated server (handed on when they leave).
+var is_leader := false
+## This instance is a dedicated server: it runs the room but is not a player.
+var is_dedicated := false
+## Client: the host we joined is a dedicated server (no host player).
+var server_dedicated := false
+## "enet" or "ws" for a client, "enet+ws" (or one of them) for a host, "" offline.
+var transport := ""
+## Client: what we connected to ("host:port" or the ws:// URL). Host: "".
+var server_address := ""
+## Host: the ports listened on (0 = transport off).
+var listen_port := 0
+var listen_ws_port := 0
+## Dedicated server: start when this many players are in (0 = the leader starts).
+var autostart_at := 0
+## Dedicated server with autostart_at: seconds from round end back to the lobby.
+var lobby_after := 15.0
 
 var _room: Room = null
 var _demo: Demo = null
-var _peer: ENetMultiplayerPeer = null
+var _peer: MultiplayerPeer = null
 var _pending_name := ""
 var _ptt_on := false
 var _autostart := false
 var _local: Array[Array] = [] # queued [kind, payload] for this peer
 var _flushing := false
 var _rate: Dictionary = {} # peer id -> PackedInt64Array [window start ms, count]
+var _ended_t := 0.0 # dedicated: seconds since the round ended
+var _mirror_sig := ""
 
 
 func _ready() -> void:
@@ -81,20 +110,20 @@ func _process(delta: float) -> void:
 		round_time += delta
 		if _room != null:
 			_room.advance(delta)
+	if is_dedicated:
+		_server_tick(delta)
 	_flush_local()
 
 
 # ---------------------------------------------------------------- public API
 
-func host_game(player_name: String, port: int = DEFAULT_PORT) -> Error:
+## Host and play. Listens on ENet UDP `port` and WebSocket TCP `ws_port` at once;
+## 0 turns a transport off. Not available on the web (browsers cannot listen).
+func host_game(player_name: String, port: int = DEFAULT_PORT, ws_port: int = DEFAULT_WS_PORT) -> Error:
 	_teardown()
-	var peer := ENetMultiplayerPeer.new()
-	var err := peer.create_server(port, MAX_CLIENTS, ENET_CHANNELS)
+	var err := _listen(port, ws_port)
 	if err != OK:
-		error.emit("Could not host on port %d: %s" % [port, error_string(err)])
 		return err
-	_peer = peer
-	multiplayer.multiplayer_peer = peer
 	is_host = true
 	my_id = multiplayer.get_unique_id()
 	_room = Room.new(_send, SimRng.from_entropy(), min_players)
@@ -105,15 +134,60 @@ func host_game(player_name: String, port: int = DEFAULT_PORT) -> Error:
 	return OK
 
 
-func join_game(player_name: String, address: String, port: int = DEFAULT_PORT) -> Error:
+## Dedicated server: run the lobby and the simulation without being a player
+## (no role, no aircraft, no voice). Same ports as host_game.
+func start_server(port: int = DEFAULT_PORT, ws_port: int = DEFAULT_WS_PORT) -> Error:
 	_teardown()
-	var peer := ENetMultiplayerPeer.new()
-	var err := peer.create_client(address, port, ENET_CHANNELS)
+	var err := _listen(port, ws_port)
 	if err != OK:
-		error.emit("Could not connect to %s:%d: %s" % [address, port, error_string(err)])
+		return err
+	is_host = true
+	is_dedicated = true
+	my_id = multiplayer.get_unique_id()
+	_room = _new_server_room()
+	_log("listening: ENet UDP %s, WebSocket TCP %s; min players %d; %s" % [
+		listen_port if listen_port > 0 else "off", listen_ws_port if listen_ws_port > 0 else "off",
+		min_players, "autostart at %d" % autostart_at if autostart_at > 0 else "the first player to join leads"])
+	_set_phase("lobby")
+	_mirror_room()
+	return OK
+
+
+## Join a game. `address` is host, host:port, [v6]:port, ws://… or wss://… (see
+## core/net/address.gd); `port` is used when the address has none. A bare host goes over
+## ENet (`port`, default 27270) on desktop/mobile and over WebSocket on the web (port
+## 27271 when `port` is left at DEFAULT_PORT; wss:// via the page's host TLS on https
+## pages). `transport_pref`: "auto", "enet" or "ws".
+func join_game(player_name: String, address: String, port: int = DEFAULT_PORT, transport_pref: String = "auto") -> Error:
+	_teardown()
+	var web := OS.has_feature("web")
+	var want := Address.WS if web or transport_pref == "ws" else Address.ENET
+	var ws_port := port if port != DEFAULT_PORT else DEFAULT_WS_PORT
+	var a := Address.parse(address, port, ws_port, want, web and _page_is_https())
+	if not a["ok"]:
+		error.emit(String(a["error"]))
+		return ERR_INVALID_PARAMETER
+	var target := String(a["url"]) if a["transport"] == Address.WS else "%s:%d" % [a["host"], a["port"]]
+	var err := OK
+	var peer: MultiplayerPeer = null
+	if a["transport"] == Address.ENET:
+		if web:
+			error.emit("Browsers can only join over WebSocket (ws:// or wss://).")
+			return ERR_UNAVAILABLE
+		var enet := ENetMultiplayerPeer.new()
+		err = enet.create_client(String(a["host"]), int(a["port"]), ENET_CHANNELS)
+		peer = enet
+	else:
+		var ws := WebSocketMultiplayerPeer.new()
+		err = ws.create_client(target)
+		peer = ws
+	if err != OK:
+		error.emit("Could not connect to %s: %s" % [target, error_string(err)])
 		return err
 	_peer = peer
 	multiplayer.multiplayer_peer = peer
+	transport = String(a["transport"])
+	server_address = target
 	_pending_name = player_name.substr(0, RAW_NAME_MAX)
 	my_name = player_name
 	return OK
@@ -124,21 +198,28 @@ func leave() -> void:
 	_set_phase("menu")
 
 
+## Leader only: a player-host starts locally, a dedicated server's leader asks the server.
 func start_round() -> void:
-	if not is_host or _room == null or is_demo:
+	if is_demo or is_dedicated:
 		return
-	_report(_room.start(my_id))
-	_flush_local()
+	if is_host and _room != null:
+		_report(_room.start(my_id))
+		_flush_local()
+	elif is_leader and _peer != null and my_id != 0:
+		_s_start.rpc_id(1)
 
 
 func return_to_lobby() -> void:
-	if not is_host or _room == null:
-		return
-	if is_demo:
+	if is_demo and _room != null:
 		leave()
 		return
-	_report(_room.back_to_lobby(my_id))
-	_flush_local()
+	if is_dedicated:
+		return
+	if is_host and _room != null:
+		_report(_room.back_to_lobby(my_id))
+		_flush_local()
+	elif is_leader and _peer != null and my_id != 0:
+		_s_lobby.rpc_id(1)
 
 
 func send_ap(changes: Dictionary) -> void:
@@ -223,6 +304,8 @@ func _flush_local() -> void:
 		var m: Array = _local.pop_front()
 		_deliver(m[0], m[1])
 	_flushing = false
+	if is_dedicated:
+		_mirror_room()
 
 
 func _report(err: String) -> void:
@@ -361,15 +444,18 @@ func _deliver(kind: String, p: Dictionary) -> void:
 
 func _on_room(p: Dictionary) -> void:
 	players.assign(p.get("players", []))
+	server_dedicated = bool(p.get("dedicated", false))
 	var room_phase := String(p.get("phase", "lobby"))
 	var me := players.filter(func(q: Dictionary) -> bool: return int(q["id"]) == my_id)
 	if not me.is_empty():
 		my_name = String(me[0]["name"])
+		is_leader = bool(me[0].get("host", false))
 	if phase == "menu" or (room_phase == "lobby" and phase != "lobby"):
 		_clear_round()
 		_set_phase("lobby")
 	lobby_changed.emit()
-	if _autostart and is_host and phase == "lobby" and _room.connected_ids().size() >= min_players:
+	var connected := players.filter(func(q: Dictionary) -> bool: return bool(q.get("connected", true))).size()
+	if _autostart and is_leader and phase == "lobby" and connected >= min_players:
 		_autostart = false
 		start_round.call_deferred()
 
@@ -423,6 +509,120 @@ func _on_peer_disconnected(id: int) -> void:
 		_flush_local()
 
 
+# ---------------------------------------------------------------- hosting / dedicated server
+
+## Listen on ENet `port` and WebSocket `ws_port` (0 = off) behind one MultiServerPeer.
+func _listen(port: int, ws_port: int) -> Error:
+	if OS.has_feature("web"):
+		error.emit("Browsers cannot host a game: join one instead.")
+		return ERR_UNAVAILABLE
+	if port <= 0 and ws_port <= 0:
+		error.emit("No port to host on.")
+		return ERR_INVALID_PARAMETER
+	var multi := MultiServerPeer.new()
+	if port > 0:
+		var enet := ENetMultiplayerPeer.new()
+		var err := enet.create_server(port, MAX_CLIENTS, ENET_CHANNELS)
+		if err != OK:
+			multi.close()
+			error.emit("Could not host on UDP port %d: %s" % [port, error_string(err)])
+			return err
+		multi.add(enet)
+	if ws_port > 0:
+		var ws := WebSocketMultiplayerPeer.new()
+		var err2 := ws.create_server(ws_port)
+		if err2 != OK:
+			multi.close()
+			error.emit("Could not host on TCP port %d (WebSocket): %s" % [ws_port, error_string(err2)])
+			return err2
+		multi.add(ws)
+	_peer = multi
+	multiplayer.multiplayer_peer = multi
+	listen_port = maxi(port, 0)
+	listen_ws_port = maxi(ws_port, 0)
+	transport = "enet+ws" if port > 0 and ws_port > 0 else ("enet" if port > 0 else "ws")
+	return OK
+
+
+func _new_server_room() -> Room:
+	var r := Room.new(_send, SimRng.from_entropy(), min_players)
+	r.dedicated = true
+	return r
+
+
+## Dedicated server: mirror the room into the public state (phase, players, radio_tx,
+## round_players, result) so Voice's relay rule and the server log see it, and emit
+## the usual signals. The server is never in the room, so it gets no messages itself.
+func _mirror_room() -> void:
+	if _room == null:
+		return
+	var st := _room.state()
+	var sig := JSON.stringify(st)
+	if _room.tx != radio_tx:
+		radio_tx.assign(_room.tx)
+		radio_changed.emit(radio_tx)
+	if sig == _mirror_sig:
+		return
+	_mirror_sig = sig
+	players.assign(st["players"])
+	if _room.phase != phase:
+		match _room.phase:
+			"playing":
+				_clear_round()
+				round_players.assign(_room.round_players())
+				var who := PackedStringArray()
+				for q in round_players:
+					who.append("%s (%s %s)" % [q["name"], q["role"], q["callsign"]])
+				_log("round started: " + ", ".join(who))
+				_set_phase("playing")
+				round_began.emit()
+			"ended":
+				result = _room.sim.result(_room.roles.real_controller_id, _room.roles.impostor_id)
+				_ended_t = 0.0
+				_log("round ended after %d s: %s wins" % [result["duration_sec"], result["winner"]])
+				_set_phase("ended")
+				round_ended.emit(result)
+			_:
+				_clear_round()
+				_set_phase(_room.phase)
+	var names := PackedStringArray()
+	for q in players:
+		names.append("%s%s" % [q["name"], "*" if q["host"] else ""])
+	_log("%s: %d player(s) %s" % [phase, players.size(), ", ".join(names)])
+	lobby_changed.emit()
+
+
+func _server_tick(delta: float) -> void:
+	if _room == null:
+		return
+	var connected := _room.connected_ids().size()
+	if connected == 0 and (_room.phase != "lobby" or not _room.players.is_empty()):
+		_log("everyone left: room reset")
+		_room = _new_server_room()
+		_mirror_room()
+		return
+	if autostart_at <= 0:
+		return
+	if _room.phase == "lobby" and _room.host_id != 0 and connected >= maxi(autostart_at, _room.min_players):
+		_report(_room.start(_room.host_id))
+	elif _room.phase == "ended":
+		_ended_t += delta
+		if _ended_t >= lobby_after and _room.host_id != 0:
+			_report(_room.back_to_lobby(_room.host_id))
+
+
+func _log(msg: String) -> void:
+	if is_dedicated:
+		print("[server] %s" % msg)
+
+
+static func _page_is_https() -> bool:
+	if not OS.has_feature("web") or not Engine.has_singleton("JavaScriptBridge"):
+		return false
+	var v: Variant = Engine.get_singleton("JavaScriptBridge").call("eval", "window.location.protocol", true)
+	return v is String and v == "https:"
+
+
 # ---------------------------------------------------------------- state
 
 func _set_phase(p: String) -> void:
@@ -456,6 +656,14 @@ func _teardown() -> void:
 	_rate.clear()
 	is_host = false
 	is_demo = false
+	is_leader = false
+	is_dedicated = false
+	server_dedicated = false
+	transport = ""
+	server_address = ""
+	listen_port = 0
+	listen_ws_port = 0
+	_mirror_sig = ""
 	my_id = 0
 	players.clear()
 	world = {}
@@ -468,16 +676,40 @@ func _teardown() -> void:
 
 
 func _apply_launch_args() -> void:
-	var a := LaunchArgs.parse(OS.get_cmdline_user_args())
+	var a := LaunchArgs.current()
 	min_players = a.min_players
 	if a.name != "":
 		my_name = a.name
 	_autostart = a.autostart
+	autostart_at = a.autostart_at
+	lobby_after = a.lobby_after
 	if a.net_test:
+		Engine.time_scale = a.time_scale
 		add_child(load("res://core/net/net_test.gd").new())
-	if a.demo != "":
+	if a.server or OS.has_feature("dedicated_server"):
+		_run_dedicated(a)
+	elif a.demo != "":
 		start_demo(a.demo)
 	elif a.host:
-		host_game(my_name if my_name != "" else "Host", a.port)
+		host_game(my_name if my_name != "" else "Host", a.port, a.ws_port)
 	elif a.join != "":
 		join_game(my_name if my_name != "" else "Player", a.join, a.port)
+
+
+func _run_dedicated(a: LaunchArgs) -> void:
+	if Engine.max_fps == 0:
+		Engine.max_fps = SERVER_MAX_FPS
+	# Leave the game's main scene (menu, 3D backdrop) before the server state exists, so no
+	# view ever reacts to it. Launching with the server scene as the scene arg skips this.
+	var scene := get_tree().current_scene
+	if scene == null or scene.scene_file_path != SERVER_SCENE:
+		if scene != null:
+			# Free it now (not queued) so its pending coroutines are dropped, not resumed
+			# outside the tree.
+			scene.get_parent().remove_child(scene)
+			scene.free()
+		get_tree().change_scene_to_file(SERVER_SCENE)
+		await get_tree().scene_changed
+	if start_server(a.port, a.ws_port) != OK:
+		push_error("Dedicated server could not start")
+		get_tree().quit(1)

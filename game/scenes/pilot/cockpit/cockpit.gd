@@ -26,6 +26,11 @@ func _ready() -> void:
 	pedestal = _add(CockpitPedestal.new(), "Pedestal") as CockpitPedestal
 	lights = _add(CockpitLights.new(), "Lights") as CockpitLights
 	# Keep the cloud out of the flight deck: subtract the volumetric fog in here.
+	if RenderCaps.has_fog_volumes():
+		_add_fog_clear()
+
+
+func _add_fog_clear() -> void:
 	var clear := FogVolume.new()
 	clear.name = "NoFogInside"
 	clear.shape = RenderingServer.FOG_VOLUME_SHAPE_BOX

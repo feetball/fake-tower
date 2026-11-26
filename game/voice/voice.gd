@@ -2,6 +2,10 @@ extends Node
 ## Voice autoload: mic capture -> 8 kHz mu-law packets -> host relay -> per-sender
 ## jitter buffer -> clean bus (lobby/ended) or radio chain (playing).
 ## Talks to Session only through dynamic access, so it degrades if Session is absent.
+## Capture is optional everywhere: with no input device, input disabled, a denied
+## permission (Android/iOS prompt, browser prompt), a non-https web page or no signal,
+## mic_ok stays false, mic_state/mic_status say why, and the player can still listen.
+## On a dedicated server (Session.is_dedicated) it only relays: no capture, no playback.
 
 signal status_changed()
 
@@ -21,8 +25,28 @@ const NO_FRAMES_TIMEOUT_S: float = 1.5
 const MUTED_DB: float = -80.0
 const RPC_CHANNEL: int = 2
 const RX_IDLE_FREE_MS: int = 10000
+const PERM_ANDROID: String = "android.permission.RECORD_AUDIO"
+const PERM_IOS: String = "appleembedded.permission.AUDIO_RECORD"
+const MIC_TEXT: Dictionary = {
+	"ok": "Microphone OK.",
+	"idle": "Microphone not in use.",
+	"starting": "Starting the microphone…",
+	"asking": "Waiting for microphone permission…",
+	"denied": "Microphone permission denied: listening only. Allow it in the system settings, then rejoin.",
+	"no_signal": "No microphone signal: listening only.",
+	"no_signal_web": "No microphone input: listening only. Allow microphone access for this page (address bar), then rejoin.",
+	"insecure": "Browsers only allow the microphone on https:// pages: listening only.",
+	"no_device": "No microphone found: listening only.",
+	"disabled": "Microphone input is disabled in this build: listening only.",
+	"server": "Dedicated server: no microphone.",
+}
 
 var mic_ok: bool = false
+## Why the mic is (not) working: a MIC_TEXT key. mic_status is the text for the UI.
+var mic_state: String = "idle"
+var mic_status: String = MIC_TEXT["idle"]
+## Voice packets received per sender id (diagnostics and tests/ws_net_test.sh).
+var rx_counts: Dictionary = {}
 var input_level: float = 0.0
 ## True while mic audio is actually being sent (open mode, or keyed in radio mode).
 var transmitting: bool = false
@@ -44,6 +68,11 @@ var _capture: AudioEffectCapture
 var _mic_player: AudioStreamPlayer
 var _capturing: bool = false
 var _mic_possible: bool = false
+var _mic_running: bool = false
+var _mic_unavailable: String = "" # MIC_TEXT key when capture can never work here
+var _perm: String = "" # "", "asking", "granted", "denied"
+var _ever_frames: bool = false
+var _dedicated: bool = false
 var _no_frames_t: float = 0.0
 var _down: RefCounted
 var _mono: PackedFloat32Array = PackedFloat32Array()
@@ -105,6 +134,7 @@ func _setup_fx_player() -> void:
 	_fx_player = AudioStreamPlayer.new()
 	_fx_player.stream = gen
 	_fx_player.bus = RadioFx.BUS_RADIO
+	_stream_playback(_fx_player)
 	add_child(_fx_player)
 	_fx_player.play()
 	_fx_pb = _fx_player.get_stream_playback() as AudioStreamGeneratorPlayback
@@ -113,20 +143,85 @@ func _setup_fx_player() -> void:
 
 func _setup_capture() -> void:
 	var enabled: bool = bool(ProjectSettings.get_setting("audio/driver/enable_input", false))
-	if not enabled or AudioServer.get_input_device_list().is_empty():
+	if not enabled:
+		_mic_unavailable = "disabled"
+		return
+	if OS.has_feature("web") and not _web_mic_api():
+		# getUserMedia exists only in secure contexts (https or localhost).
+		_mic_unavailable = "insecure"
+		return
+	if AudioServer.get_input_device_list().is_empty():
+		_mic_unavailable = "no_device"
 		return
 	var bus: int = AudioServer.get_bus_index(RadioFx.BUS_CAPTURE)
 	if bus == -1:
+		_mic_unavailable = "no_device"
 		return
 	_capture = AudioServer.get_bus_effect(bus, 0) as AudioEffectCapture
 	if _capture == null:
+		_mic_unavailable = "no_device"
 		return
 	_capture.buffer_length = 0.25
 	_mic_player = AudioStreamPlayer.new()
 	_mic_player.stream = AudioStreamMicrophone.new()
 	_mic_player.bus = RadioFx.BUS_CAPTURE
+	_stream_playback(_mic_player)
 	add_child(_mic_player)
 	_mic_possible = true
+
+
+## Web exports default to "sample" playback, which bypasses the bus effects (capture,
+## radio DSP) and cannot play generators: force the mixer path.
+static func _stream_playback(p: AudioStreamPlayer) -> void:
+	p.playback_type = AudioServer.PLAYBACK_TYPE_STREAM
+
+
+static func _web_mic_api() -> bool:
+	if not Engine.has_singleton("JavaScriptBridge"):
+		return false
+	var v: Variant = Engine.get_singleton("JavaScriptBridge").call("eval",
+		"!!(window.isSecureContext && navigator.mediaDevices && navigator.mediaDevices.getUserMedia)", true)
+	return v is bool and v
+
+
+# ---------------------------------------------------------------- permission (Android, iOS 17+)
+
+## The OS permission to ask for before capturing, or "" when none is needed (desktop,
+## web: the browser asks by itself; iOS < 17: the system asks on first capture).
+static func _permission_name() -> String:
+	match OS.get_name():
+		"Android":
+			return PERM_ANDROID
+		"iOS":
+			return PERM_IOS if OS.get_version().get_slice(".", 0).to_int() >= 17 else ""
+	return ""
+
+
+## True when capture may start now; otherwise asks (once) and waits for the answer.
+func _permission_ready() -> bool:
+	if _perm == "granted":
+		return true
+	if _perm == "asking" or _perm == "denied":
+		return false
+	var perm := _permission_name()
+	if perm == "" or OS.get_granted_permissions().has(perm):
+		_perm = "granted"
+		return true
+	var tree := get_tree()
+	if tree != null and not tree.on_request_permissions_result.is_connected(_on_permission_result):
+		tree.on_request_permissions_result.connect(_on_permission_result)
+	_perm = "asking"
+	if OS.request_permission(perm):
+		_perm = "granted"
+		return true
+	return false
+
+
+func _on_permission_result(permission: String, granted: bool) -> void:
+	if permission != _permission_name() or _perm != "asking":
+		return
+	_perm = "granted" if granted else "denied"
+	_update_mic()
 
 
 func _find_session() -> void:
@@ -170,6 +265,9 @@ func _read_session() -> void:
 
 func _refresh() -> void:
 	_read_session()
+	var ded: Variant = _session.get("is_dedicated") if _session != null else false
+	var was_dedicated := _dedicated
+	_dedicated = ded is bool and ded
 	var old_mode: String = mode
 	var old_tx: bool = transmitting
 	var old_blocked: bool = blocked
@@ -177,7 +275,9 @@ func _refresh() -> void:
 	var keyed: bool = _tx.has(_my_id)
 	var active_phase: bool = _phase == "lobby" or _phase == "playing" or _phase == "ended"
 	transmitting = active_phase and Logic.mic_enabled(mode, keyed)
-	_set_capturing(active_phase and _mic_possible)
+	_set_capturing(active_phase)
+	if was_dedicated != _dedicated:
+		_update_mic()
 
 	var aud: Dictionary = Logic.compute_audibility(mode, _my_id, _tx, _rx.keys())
 	var gains: Dictionary = aud["gains"]
@@ -210,10 +310,32 @@ func _set_capturing(on: bool) -> void:
 	if on == _capturing:
 		return
 	_capturing = on
-	if _mic_player == null:
+	_update_mic()
+
+
+## Start or stop the mic player to match _capturing, the permission and the platform,
+## and keep mic_state current. Never throws: anything missing means listen-only.
+func _update_mic() -> void:
+	var want := _capturing and not _dedicated
+	if _dedicated:
+		_set_mic_state("server")
+	elif not want:
+		_set_mic_state("idle")
+	elif _mic_unavailable != "":
+		_set_mic_state(_mic_unavailable)
+	elif not _permission_ready():
+		_set_mic_state("asking" if _perm == "asking" else "denied")
+		want = false
+	elif not _mic_running:
+		_set_mic_state("starting")
+	if not _mic_possible:
+		want = false
+	if want == _mic_running:
 		return
-	if on:
+	_mic_running = want
+	if want:
 		_no_frames_t = 0.0
+		_ever_frames = false
 		_mic_player.play()
 	else:
 		_mic_player.stop()
@@ -223,9 +345,19 @@ func _set_capturing(on: bool) -> void:
 
 
 func _set_mic_ok(v: bool) -> void:
+	if v:
+		_set_mic_state("ok")
 	if v != mic_ok:
 		mic_ok = v
 		status_changed.emit()
+
+
+func _set_mic_state(st: String) -> void:
+	if st == mic_state:
+		return
+	mic_state = st
+	mic_status = MIC_TEXT.get(st, st)
+	status_changed.emit()
 
 
 # ---------------------------------------------------------------- per frame
@@ -253,7 +385,7 @@ func _process(delta: float) -> void:
 
 
 func _pump_capture(delta: float) -> void:
-	if not _capturing or _capture == null:
+	if not _mic_running or _capture == null:
 		input_level = maxf(0.0, input_level - delta * 2.0)
 		return
 	var avail: int = _capture.get_frames_available()
@@ -261,9 +393,14 @@ func _pump_capture(delta: float) -> void:
 		_no_frames_t += delta
 		if _no_frames_t > NO_FRAMES_TIMEOUT_S:
 			_set_mic_ok(false)
+			# Never any frames: no device, denied (the browser gives no callback) or a
+			# suspended audio context. Frames arriving later still flip back to "ok".
+			if not _ever_frames:
+				_set_mic_state("no_signal_web" if OS.has_feature("web") else "no_signal")
 		input_level = maxf(0.0, input_level - delta * 2.0)
 		return
 	_no_frames_t = 0.0
+	_ever_frames = true
 	_set_mic_ok(true)
 	var frames: PackedVector2Array = _capture.get_buffer(avail)
 	var peak: float = 0.0
@@ -323,11 +460,30 @@ func _emit_packet(chunk: PackedFloat32Array) -> void:
 			_gate_hold -= 1
 		else:
 			return
-	var packet: PackedByteArray = Logic.build_packet(seq, MuLaw.encode(chunk))
+	_send_packet(Logic.build_packet(seq, MuLaw.encode(chunk)))
+
+
+func _send_packet(packet: PackedByteArray) -> void:
+	if not multiplayer.has_multiplayer_peer():
+		return
 	if multiplayer.is_server():
 		_relay(_my_id, packet)
 	else:
 		_rx_to_host.rpc_id(1, packet)
+
+
+## Test hook (tests/ws_net_test.sh): send `n` packets of a 400 Hz tone through the
+## normal path, bypassing the mic, the gate and local keying (the host still applies
+## its relay rule and rate limit).
+func debug_send_tone(n: int) -> void:
+	var chunk := PackedFloat32Array()
+	chunk.resize(PACKET_SAMPLES)
+	for j in PACKET_SAMPLES:
+		chunk[j] = 0.3 * sin(TAU * 400.0 * j / VOICE_RATE)
+	var enc := MuLaw.encode(chunk)
+	for i in n:
+		_send_packet(Logic.build_packet(_seq, enc))
+		_seq = (_seq + 1) & 0xFFFF
 
 
 # ---------------------------------------------------------------- transport
@@ -340,7 +496,7 @@ func _relay(sender: int, packet: PackedByteArray) -> void:
 	for peer in multiplayer.get_peers():
 		if peer != sender:
 			_rx_from_host.rpc_id(peer, sender, packet)
-	if sender != _my_id:
+	if sender != _my_id and not _dedicated:
 		_receive(sender, packet)
 
 
@@ -374,6 +530,7 @@ func _rx_from_host(sender: int, packet: PackedByteArray) -> void:
 # ---------------------------------------------------------------- playback
 
 func _receive(sender: int, packet: PackedByteArray) -> void:
+	rx_counts[sender] = int(rx_counts.get(sender, 0)) + 1
 	var r: Rx = _rx.get(sender)
 	if r == null:
 		r = _make_rx(sender)
@@ -392,6 +549,7 @@ func _make_rx(sender: int) -> Rx:
 	r.player = AudioStreamPlayer.new()
 	r.player.stream = gen
 	r.player.bus = RadioFx.BUS_CLEAN
+	_stream_playback(r.player)
 	add_child(r.player)
 	r.player.play()
 	r.pb = r.player.get_stream_playback() as AudioStreamGeneratorPlayback

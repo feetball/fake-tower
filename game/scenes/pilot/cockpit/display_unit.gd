@@ -27,7 +27,8 @@ func setup(inst: PilotInstrumentPart, resolution: int, seed_v: float) -> void:
 	viewport.name = "Viewport"
 	viewport.disable_3d = true
 	viewport.transparent_bg = false
-	viewport.msaa_2d = Viewport.MSAA_4X
+	# 2D MSAA is not available in Compatibility (GLES3 / WebGL 2).
+	viewport.msaa_2d = Viewport.MSAA_DISABLED if RenderCaps.is_compatibility() else Viewport.MSAA_4X
 	viewport.size_2d_override_stretch = true
 	viewport.size_2d_override = Vector2i(1000, int(1000.0 * screen_size.y / screen_size.x))
 	viewport.canvas_item_default_texture_filter = Viewport.DEFAULT_CANVAS_ITEM_TEXTURE_FILTER_LINEAR_WITH_MIPMAPS

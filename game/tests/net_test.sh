@@ -1,6 +1,7 @@
 #!/bin/bash
 # Network integration test: one headless host + 3 headless clients on localhost.
-# Usage: game/tests/net_test.sh   (env GODOT overrides the binary, PORT the port)
+# Usage: game/tests/net_test.sh   (env GODOT overrides the binary, PORT the port,
+#        MIXED=1 makes client 3 join the same player-host over WebSocket, port PORT+1)
 # Each instance runs with --net-test (core/net/net_test.gd) and prints NETTEST lines.
 set -u
 GODOT="${GODOT:-/home/user/tools/godot/godot}"
@@ -14,7 +15,11 @@ run() { # name, args...
 }
 run host --host --autostart --name=Host
 sleep 1.5
-for i in 1 2 3; do run "c$i" --join=127.0.0.1 --name="Client$i"; sleep 0.3; done
+for i in 1 2 3; do
+  join=127.0.0.1
+  [ "$i" = 3 ] && [ -n "${MIXED:-}" ] && join="ws://127.0.0.1:$((PORT + 1))"
+  run "c$i" --join="$join" --name="Client$i"; sleep 0.3
+done
 wait
 cat "$LOGS"/*.log | grep -E "NETTEST|SCRIPT ERROR" | sed 's/^/  /'
 

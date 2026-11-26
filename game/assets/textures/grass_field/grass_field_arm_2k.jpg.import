@@ -3,19 +3,21 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://cq8jyb2d3s0aj"
-path="res://.godot/imported/grass_field_arm_2k.jpg-2d5fb03f8f0bac02a73ea4f3083eeb2e.ctex"
+path.s3tc="res://.godot/imported/grass_field_arm_2k.jpg-2d5fb03f8f0bac02a73ea4f3083eeb2e.s3tc.ctex"
+path.etc2="res://.godot/imported/grass_field_arm_2k.jpg-2d5fb03f8f0bac02a73ea4f3083eeb2e.etc2.ctex"
 metadata={
-"vram_texture": false
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
+"vram_texture": true
 }
 
 [deps]
 
 source_file="res://assets/textures/grass_field/grass_field_arm_2k.jpg"
-dest_files=["res://.godot/imported/grass_field_arm_2k.jpg-2d5fb03f8f0bac02a73ea4f3083eeb2e.ctex"]
+dest_files=["res://.godot/imported/grass_field_arm_2k.jpg-2d5fb03f8f0bac02a73ea4f3083eeb2e.s3tc.ctex", "res://.godot/imported/grass_field_arm_2k.jpg-2d5fb03f8f0bac02a73ea4f3083eeb2e.etc2.ctex"]
 
 [params]
 
-compress/mode=0
+compress/mode=2
 compress/high_quality=false
 compress/lossy_quality=0.7
 compress/uastc_level=0

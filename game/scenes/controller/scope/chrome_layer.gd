@@ -125,7 +125,7 @@ func _footer() -> void:
 	draw_rect(Rect2(0, top, ctx.size.x, ctx.foot_h), Look.DCB_BG)
 	draw_line(Vector2(0, top + 0.5), Vector2(ctx.size.x, top + 0.5), Look.DCB_EDGE.darkened(0.3), ctx.px(1.0))
 	var mid := top + ctx.foot_h * 0.5
-	DU.text(self, ctx.mono(500), Vector2(ctx.size.x - ctx.px(12.0), mid), HELP, ctx.fs(11.0), Look.HUD_DIM, 1, 0)
+	DU.text(self, ctx.mono(500), Vector2(ctx.size.x - ctx.px(12.0), mid), ctx.help if ctx.help != "" else HELP, ctx.fs(11.0), Look.HUD_DIM, 1, 0)
 	if ctx.mouse.x < 0.0 or not ctx.xform.plot.has_point(ctx.mouse):
 		return
 	var w := ctx.xform.to_world(ctx.mouse)

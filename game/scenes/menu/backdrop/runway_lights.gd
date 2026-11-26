@@ -18,6 +18,9 @@ const FT := 0.3048
 ## Scales how strongly the OmniLights light the volumetric fog.
 @export var fog_glow := 1.0
 
+## Glow sprites standing in for the OmniLights' volumetric fog (null on Forward+).
+var _glow: FogGlow
+
 const WHITE := Color(1.0, 0.92, 0.78)
 const AMBER := Color(1.0, 0.72, 0.22)
 const GREEN := Color(0.2, 1.0, 0.45)
@@ -79,10 +82,13 @@ func build() -> void:
 	for lp: LightPoints in [edges, inset, thr, papi]:
 		lp.commit()
 	if with_omni_lights:
+		_glow = FogGlow.create(self)
 		_omni(Vector3(0.0, 1.2, 1.5), GREEN, 1.4, 30.0, 2.5)
 		for zz in [120.0, 360.0, 600.0, 900.0]:
 			for side in [-1.0, 1.0]:
 				_omni(Vector3(side * half, 1.0, -zz), WHITE, 0.8, 26.0)
+		if _glow != null:
+			_glow.commit()
 
 
 func _points(n: String, dir: Vector3, power: float, bmin: float) -> LightPoints:
@@ -108,3 +114,5 @@ func _omni(pos: Vector3, col: Color, energy: float, rng: float, fog: float = 10.
 	l.light_volumetric_fog_energy = fog * fog_glow
 	l.shadow_enabled = false
 	add_child(l)
+	if _glow != null:
+		_glow.add_light(pos, col, energy, rng, l.light_volumetric_fog_energy)

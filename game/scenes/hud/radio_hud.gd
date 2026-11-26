@@ -5,9 +5,15 @@ extends Control
 ## button. Owns push-to-talk: hold the `ptt` action (Space) or the button.
 ## Views call get_reserved_top_px() (or find the node in group "radio_hud")
 ## to lay their content out below the strip.
+## On touch devices (TouchMode) the strip's PTT button becomes a MENU button
+## (settings_requested) and a large hold-to-talk button sits in the bottom-right
+## corner of the safe area; views keep clear of get_touch_ptt_rect().
+
+signal settings_requested
 
 const STRIP_H := 58.0
 const FREQ := "119.850"
+const TOUCH_PTT_SIZE := 184.0
 
 const RADIO_COLORS := {
 	"idle": UiTheme.FAINT,
@@ -32,8 +38,11 @@ var _radio_box: PanelContainer
 var _radio_label: Label
 var _clock: Label
 var _ptt: Button
+var _touch_ptt: TouchButton
+var _menu_btn: TouchButton
 var _key_held := false
 var _mouse_held := false
+var _touch_held := false
 var _sent_ptt := false
 var _blink := 0.0
 var _radio_kind := ""
@@ -56,6 +65,13 @@ func get_reserved_top_px() -> float:
 	if not visible:
 		return 0.0
 	return maxf(_strip.size.y, STRIP_H) if _strip else STRIP_H
+
+
+## The big touch PTT button's rect in canvas units (empty when not on touch or hidden).
+func get_touch_ptt_rect() -> Rect2:
+	if _touch_ptt == null or not is_visible_in_tree():
+		return Rect2()
+	return Rect2(_touch_ptt.position, _touch_ptt.size)
 
 
 func _build() -> void:
@@ -114,6 +130,44 @@ func _build() -> void:
 		_mouse_held = false
 		_apply_ptt())
 	row.add_child(_ptt)
+	if TouchMode.active():
+		_build_touch(row)
+
+
+func _build_touch(row: HBoxContainer) -> void:
+	_ptt.visible = false
+	_menu_btn = TouchButton.make("MENU", Vector2(128.0, 44.0))
+	_menu_btn.font_size = 18
+	_menu_btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	_menu_btn.tapped.connect(func() -> void:
+		release_ptt()
+		settings_requested.emit())
+	row.add_child(_menu_btn)
+	_touch_ptt = TouchButton.make("PTT", Vector2(TOUCH_PTT_SIZE, TOUCH_PTT_SIZE), "HOLD TO TALK")
+	_touch_ptt.name = "TouchPtt"
+	_touch_ptt.tint = UiTheme.AMBER
+	_touch_ptt.mono = true
+	_touch_ptt.font_size = 40
+	_touch_ptt.caption_size = 16
+	_touch_ptt.corner = 18
+	_touch_ptt.down.connect(func() -> void:
+		_touch_held = true
+		_apply_ptt())
+	_touch_ptt.up.connect(func() -> void:
+		_touch_held = false
+		_apply_ptt())
+	add_child(_touch_ptt)
+	_layout_touch()
+	get_viewport().size_changed.connect(_layout_touch)
+
+
+func _layout_touch() -> void:
+	if _touch_ptt == null:
+		return
+	var safe := TouchMode.safe_rect(get_viewport())
+	var s := Vector2(TOUCH_PTT_SIZE, TOUCH_PTT_SIZE)
+	_touch_ptt.size = s
+	_touch_ptt.position = safe.end - s - Vector2(TouchMode.EDGE, TouchMode.EDGE)
 
 
 func refresh() -> void:
@@ -158,6 +212,13 @@ func _refresh_radio() -> void:
 	_ptt.add_theme_color_override(&"font_hover_color", ptt_col)
 	_ptt.add_theme_color_override(&"font_pressed_color", UiTheme.AMBER)
 	_ptt.text = "● TX" if _sent_ptt else "PTT · SPACE"
+	if _touch_ptt != null:
+		_touch_ptt.lit = _sent_ptt
+		_touch_ptt.text = "TX" if _sent_ptt else "PTT"
+		_touch_ptt.caption = {"blocked": "BLOCKED", "dead": "RADIO DEAD", "rx": "RECEIVING"}.get(
+			_radio_kind, "TRANSMITTING" if _sent_ptt else "HOLD TO TALK")
+		_touch_ptt.tint = UiTheme.RED if _radio_kind in ["blocked", "dead"] else UiTheme.AMBER
+		_touch_ptt.queue_redraw()
 
 
 func _input(event: InputEvent) -> void:
@@ -198,11 +259,14 @@ func _notification(what: int) -> void:
 func release_ptt() -> void:
 	_key_held = false
 	_mouse_held = false
+	_touch_held = false
+	if _touch_ptt != null:
+		_touch_ptt.cancel()
 	_apply_ptt()
 
 
 func _apply_ptt() -> void:
-	var on := (_key_held or _mouse_held) and is_inside_tree() and is_visible_in_tree()
+	var on := (_key_held or _mouse_held or _touch_held) and is_inside_tree() and is_visible_in_tree()
 	if on == _sent_ptt:
 		return
 	_sent_ptt = on

@@ -7,7 +7,9 @@ extends CompositorEffect
 ## result. Pixels nearer than the glass (the cockpit interior) are left alone,
 ## using the depth buffer. Drop positions are fixed in the aircraft frame
 ## (azimuth/elevation of the view ray), so they stay on the glass when the
-## pilot looks around. Inert without a RenderingDevice (headless, Compatibility).
+## pilot looks around. Forward+ only (RenderCaps.has_compute_effects): inert without
+## a RenderingDevice (headless, Compatibility), and not used on Mobile, whose 3D
+## buffer is not the rgba16f image this pass binds.
 
 const CONTEXT := &"rain_glass"
 const COPY := &"copy"
@@ -202,7 +204,7 @@ func _init() -> void:
 
 
 static func is_supported() -> bool:
-	return RenderingServer.get_rendering_device() != null
+	return RenderCaps.has_compute_effects()
 
 
 func _notification(what: int) -> void:

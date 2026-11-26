@@ -24,6 +24,7 @@ var dcb_rects: Array[Dictionary] = [] ## {id, rect}, filled by the chrome layer
 var dcb_h := 36.0
 var foot_h := 26.0 ## bottom info bar
 var status: Dictionary = {} ## icao, time, atis_letter, qnh, transition_alt
+var help := "" ## footer control reminder; "" = the mouse/keyboard one (chrome_layer.HELP)
 
 
 ## Geometry in physical pixels for a 1080p-canvas length.

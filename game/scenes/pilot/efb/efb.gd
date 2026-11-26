@@ -17,6 +17,12 @@ const TOP_RESERVED := 70.0
 var page := ""
 var is_open := false
 var top_reserved := TOP_RESERVED
+## Canvas units kept free at the bottom (the touch autopilot strip).
+var bottom_reserved := 0.0:
+	set(v):
+		bottom_reserved = v
+		if is_node_ready():
+			_layout()
 
 var _tablet: Panel
 var _plate: Control
@@ -82,7 +88,7 @@ func _tab_button(txt: String) -> Button:
 
 func _layout() -> void:
 	var vs := get_viewport_rect().size
-	var avail := Vector2(vs.x - 80.0, vs.y - top_reserved - 30.0)
+	var avail := Vector2(vs.x - 80.0, vs.y - top_reserved - bottom_reserved - 30.0)
 	# Landscape tablet sized to the chart's aspect plus the tab bar.
 	var inner := Vector2(1440.0, 840.0)
 	var k := minf((avail.x - 48.0) / inner.x, (avail.y - 48.0 - 56.0) / inner.y)

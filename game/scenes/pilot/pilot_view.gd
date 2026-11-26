@@ -17,7 +17,8 @@ extends Node3D
 const COCKPIT_LAYER := 2 ## render layer bit for the flight deck (exterior lights skip it)
 const LANDED_CAPTION_KT := 40.0
 
-## Quality hook: volumetric fog on/off, display resolution, SSR.
+## Quality hook: volumetric fog on/off, display resolution, SSR, rain and cloud
+## counts. Set from RenderCaps.quality() in _ready.
 @export_enum("low", "medium", "high") var quality := "high":
 	set(v):
 		quality = v
@@ -44,11 +45,14 @@ var _fuel_cut_t := -1.0
 
 
 func _ready() -> void:
+	# Per-device tier (lighter on Web / Mobile), --quality= / --pilot-quality= override.
+	quality = RenderCaps.quality()
 	bus.flight = flight
 	bus.ap = autopilot
 	cockpit.setup(bus, autopilot, quality)
 	_assign_layers(cockpit)
 	interaction.camera = rig.camera
+	interaction.rig = rig
 	cockpit.windshield.attach(rig.camera)
 	interaction.controls = cockpit.controls()
 	interaction.tooltip = tooltip
@@ -61,6 +65,8 @@ func _ready() -> void:
 	flight.sample.connect(_on_sample)
 	efb.visibility_changed_to.connect(func(open: bool) -> void: interaction.enabled = not open)
 	rig.view_changed.connect(func(_v: String) -> void: hint.flash(2.5))
+	if TouchMode.active():
+		_add_touch_controls()
 	_apply_debug_args()
 	_apply_quality()
 	_apply_reserved_top.call_deferred()
@@ -151,6 +157,21 @@ func _assign_layers(n: Node) -> void:
 				(l as Light3D).light_cull_mask = ~(1 << (COCKPIT_LAYER - 1))
 
 
+## Touch devices: on-screen view / EFB / autopilot controls (scenes/pilot/touch),
+## drawn under the EFB and the outcome overlay.
+func _add_touch_controls() -> void:
+	var tc := PilotTouchControls.new()
+	tc.autopilot = autopilot
+	tc.rig = rig
+	tc.efb = efb
+	tc.bus = bus
+	tc.annunciators = cockpit.annunciators
+	tc.hint = hint
+	efb.get_parent().add_child(tc)
+	efb.get_parent().move_child(tc, 0)
+	hint.text = PilotViewHint.TOUCH_TEXT
+
+
 ## Keep the EFB and tooltip clear of the HUD strip main draws on top.
 func _apply_reserved_top() -> void:
 	var px := 70.0
@@ -179,9 +200,6 @@ func _style_tooltip() -> void:
 
 
 func _apply_debug_args() -> void:
-	var q := _arg("--pilot-quality=")
-	if q in ["low", "medium", "high"]:
-		quality = q
 	var pos := _arg("--pilot-debug-pos=")
 	if pos != "":
 		var p := pos.split(",")
