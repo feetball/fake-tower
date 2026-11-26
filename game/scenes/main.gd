@@ -4,6 +4,9 @@ extends Node
 ##   playing       -> pilot or controller view under View, radio HUD on top
 ##   ended         -> end screen over the frozen view
 ## Esc opens the settings / pause panel. No gameplay logic lives here.
+## Touch devices (TouchMode): a MENU button opens the same panel (top right
+## outside a round, in the HUD strip during one), bigger buttons in the
+## dialogs, and TouchKeyboardAvoider keeps text fields above the on-screen keyboard.
 ## User arg --ui-demo=<screen> drives the UI from a local fake Session
 ## (scenes/menu/dev/ui_demo.gd) for screenshots.
 
@@ -34,6 +37,7 @@ var _dirty := false
 var _round_over := false
 var _pending_message := ""
 var _demo: Node
+var _touch_menu: TouchButton
 
 
 func _ready() -> void:
@@ -44,10 +48,16 @@ func _ready() -> void:
 	_settings.leave_requested.connect(func() -> void: Sess.invoke(&"leave"))
 	_settings.closed.connect(_restore_focus)
 	_overlay.add_child(_settings)
+	_hud.settings_requested.connect(func() -> void: _settings.open(Sess.phase() != "menu"))
+	if TouchMode.active():
+		_build_touch()
 	_build_toast()
 	_hud.visible = false
 	_end.visible = false
 	_fade.color = Color(0, 0, 0, 1)
+
+	if DebugState.wanted():
+		add_child(DebugState.new())
 
 	var demo_screen := _user_arg("--ui-demo=")
 	if demo_screen != "":
@@ -194,6 +204,35 @@ func _on_connection_lost() -> void:
 		_menu.show_message(_pending_message)
 		_pending_message = ""
 	_sync()
+
+
+# --- touch -------------------------------------------------------------------
+
+func _build_touch() -> void:
+	TouchMode.enlarge_targets(_settings, TouchMode.TARGET_PX * 0.62)
+	var avoider := TouchKeyboardAvoider.new()
+	avoider.name = "KeyboardAvoider"
+	add_child(avoider)
+	_touch_menu = TouchButton.make("MENU", Vector2(150.0, 84.0))
+	_touch_menu.name = "TouchMenu"
+	_touch_menu.font_size = 20
+	_touch_menu.tapped.connect(func() -> void:
+		if _menu != null:
+			_menu.close_overlay()
+		_settings.open(Sess.phase() != "menu"))
+	_overlay.add_child(_touch_menu)
+	_overlay.move_child(_touch_menu, 0) # under the settings panel
+
+
+func _process(_delta: float) -> void:
+	if _touch_menu == null:
+		return
+	# Outside a round (menu, lobby, end screen); the HUD strip has its own.
+	_touch_menu.visible = not _hud.visible and not _settings.visible and _fade.color.a < 0.5 \
+		and not (_menu != null and _menu.is_overlay_open())
+	var safe := TouchMode.safe_rect(get_viewport())
+	_touch_menu.position = Vector2(safe.end.x - _touch_menu.size.x - TouchMode.EDGE * 2.0,
+		safe.position.y + TouchMode.EDGE * 2.0)
 
 
 # --- fades, toast, Esc -------------------------------------------------------

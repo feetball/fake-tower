@@ -30,6 +30,9 @@ void fragment() {
 	float ext = exp(-dist * extinction_per_m);
 	// Soft intersection with geometry.
 	float depth = texture(depth_tex, SCREEN_UV).r;
+#if CURRENT_RENDERER == RENDERER_COMPATIBILITY
+	depth = depth * 2.0 - 1.0; // OpenGL NDC z is -1..1 (Vulkan: 0..1, used as is)
+#endif
 	vec4 scene = INV_PROJECTION_MATRIX * vec4(SCREEN_UV * 2.0 - 1.0, depth, 1.0);
 	float scene_z = scene.z / scene.w;
 	float soft = clamp((VERTEX.z - scene_z) / soft_m, 0.0, 1.0);

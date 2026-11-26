@@ -92,6 +92,17 @@ static func is_host() -> bool:
 	return val(&"is_host", false)
 
 
+## May start the round / return to the lobby: the player-host, or a dedicated
+## server's lobby leader. Falls back to is_host for sessions without is_leader.
+static func can_lead() -> bool:
+	return val(&"is_leader", is_host())
+
+
+## The host we joined is a dedicated server (no host player; a leader instead).
+static func server_dedicated() -> bool:
+	return val(&"server_dedicated", false)
+
+
 static func my_role() -> String:
 	return val(&"my_role", "")
 
@@ -167,6 +178,11 @@ static func round_player(id: int) -> Dictionary:
 
 static func mic_ok() -> bool:
 	return voice_val(&"mic_ok", false)
+
+
+## Why the microphone is or is not working, for the UI ("" if Voice does not say).
+static func mic_status() -> String:
+	return voice_val(&"mic_status", "")
 
 
 static func input_level() -> float:

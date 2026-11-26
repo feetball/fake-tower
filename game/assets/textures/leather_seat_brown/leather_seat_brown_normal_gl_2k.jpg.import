@@ -3,25 +3,27 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://2hqrsjkjb8au"
-path="res://.godot/imported/leather_seat_brown_normal_gl_2k.jpg-20614a8da9a3dda15a24b9e905e9ca51.ctex"
+path.s3tc="res://.godot/imported/leather_seat_brown_normal_gl_2k.jpg-20614a8da9a3dda15a24b9e905e9ca51.s3tc.ctex"
+path.etc2="res://.godot/imported/leather_seat_brown_normal_gl_2k.jpg-20614a8da9a3dda15a24b9e905e9ca51.etc2.ctex"
 metadata={
-"vram_texture": false
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
+"vram_texture": true
 }
 
 [deps]
 
 source_file="res://assets/textures/leather_seat_brown/leather_seat_brown_normal_gl_2k.jpg"
-dest_files=["res://.godot/imported/leather_seat_brown_normal_gl_2k.jpg-20614a8da9a3dda15a24b9e905e9ca51.ctex"]
+dest_files=["res://.godot/imported/leather_seat_brown_normal_gl_2k.jpg-20614a8da9a3dda15a24b9e905e9ca51.s3tc.ctex", "res://.godot/imported/leather_seat_brown_normal_gl_2k.jpg-20614a8da9a3dda15a24b9e905e9ca51.etc2.ctex"]
 
 [params]
 
-compress/mode=0
+compress/mode=2
 compress/high_quality=false
 compress/lossy_quality=0.7
 compress/uastc_level=0
 compress/rdo_quality_loss=0.0
 compress/hdr_compression=1
-compress/normal_map=0
+compress/normal_map=1
 compress/channel_pack=0
 mipmaps/generate=true
 mipmaps/limit=-1

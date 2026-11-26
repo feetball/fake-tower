@@ -2,7 +2,8 @@ class_name NightEnvironment
 extends WorldEnvironment
 ## Night, low overcast, fog. ACES tonemapping, glow on lights, volumetric fog
 ## that the airfield lights scatter into, depth fog beyond the volumetric
-## range, SSR for the wet asphalt. Uses an HDRI from res://assets if found
+## range, SSR for the wet asphalt. Without volumetric fog / SSR (Mobile,
+## Compatibility) RenderCaps substitutes denser lit depth fog. Uses an HDRI from res://assets if found
 ## (heavily darkened — it only needs to give the cloud deck some shape).
 
 ## Meteorological visibility in metres; drives fog density.
@@ -76,7 +77,6 @@ static func make(visibility: float, exp_mult: float = 1.0, hdri: bool = true, wi
 	env.fog_sky_affect = 1.0
 	env.fog_aerial_perspective = 0.0
 
-	env.volumetric_fog_enabled = true
 	env.volumetric_fog_density = sigma * 10.0
 	env.volumetric_fog_albedo = Color(0.85, 0.87, 0.9)
 	env.volumetric_fog_emission = Color(0.045, 0.048, 0.06)
@@ -88,9 +88,12 @@ static func make(visibility: float, exp_mult: float = 1.0, hdri: bool = true, wi
 	env.volumetric_fog_sky_affect = 1.0
 	env.volumetric_fog_temporal_reprojection_enabled = true
 
-	env.ssr_enabled = with_ssr
 	env.ssr_max_steps = 48
 	env.ssr_fade_in = 0.1
 	env.ssr_fade_out = 2.0
 	env.ssr_depth_tolerance = 0.4
+	env.ssr_enabled = with_ssr and RenderCaps.has_ssr()
+	# Last: Mobile / Compatibility get depth fog in place of the volumetric medium.
+	RenderCaps.enable_volumetric_fog(env)
+	RenderCaps.adapt_glow(env)
 	return env

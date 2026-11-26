@@ -33,6 +33,9 @@ var host_id := 0
 ## Keying order on the frequency.
 var tx: Array[int] = []
 var min_players := 4
+## Dedicated server: the host is not a player; `host_id` is then the lobby leader
+## (first-joined player, handed on when they leave). Sent to clients in `room`.
+var dedicated := false
 var rng: SimRng
 var sim: SimRound = null
 var roles: Roles = null
@@ -103,7 +106,10 @@ func state() -> Dictionary:
 	var list: Array = []
 	for p in players:
 		list.append({"id": p["id"], "name": p["name"], "host": p["id"] == host_id, "connected": p["connected"]})
-	return {"phase": phase, "players": list}
+	var out := {"phase": phase, "players": list}
+	if dedicated:
+		out["dedicated"] = true
+	return out
 
 
 ## Public round roster, in join order so position never hints at a role.
@@ -168,6 +174,8 @@ func add(id: int, raw_name: Variant) -> String:
 		return "Round in progress, wait for it to end"
 	if players.size() >= MAX_PLAYERS:
 		return "Room is full"
+	if host_id != 0 and find(host_id).is_empty():
+		host_id = 0
 	var taken: Array[String] = []
 	for p in players:
 		taken.append(p["name"])
@@ -189,7 +197,17 @@ func disconnect_player(id: int) -> void:
 	set_ptt(id, false)
 	if phase == "lobby":
 		players.erase(p)
+	if id == host_id:
+		_hand_on_leader()
 	broadcast_state()
+
+
+## The leader left: the next connected player in join order leads (0 if none; the next
+## to join then leads). Only reachable with a dedicated host, as a player-host leaving
+## closes the session.
+func _hand_on_leader() -> void:
+	var ids := connected_ids()
+	host_id = ids[0] if not ids.is_empty() else 0
 
 
 func start(by_id: int) -> String:

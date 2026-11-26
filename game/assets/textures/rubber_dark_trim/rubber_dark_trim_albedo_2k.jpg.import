@@ -3,19 +3,21 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://d2qb6qu50rivc"
-path="res://.godot/imported/rubber_dark_trim_albedo_2k.jpg-81334332addbbeccb2785fa3ed0f34ad.ctex"
+path.s3tc="res://.godot/imported/rubber_dark_trim_albedo_2k.jpg-81334332addbbeccb2785fa3ed0f34ad.s3tc.ctex"
+path.etc2="res://.godot/imported/rubber_dark_trim_albedo_2k.jpg-81334332addbbeccb2785fa3ed0f34ad.etc2.ctex"
 metadata={
-"vram_texture": false
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
+"vram_texture": true
 }
 
 [deps]
 
 source_file="res://assets/textures/rubber_dark_trim/rubber_dark_trim_albedo_2k.jpg"
-dest_files=["res://.godot/imported/rubber_dark_trim_albedo_2k.jpg-81334332addbbeccb2785fa3ed0f34ad.ctex"]
+dest_files=["res://.godot/imported/rubber_dark_trim_albedo_2k.jpg-81334332addbbeccb2785fa3ed0f34ad.s3tc.ctex", "res://.godot/imported/rubber_dark_trim_albedo_2k.jpg-81334332addbbeccb2785fa3ed0f34ad.etc2.ctex"]
 
 [params]
 
-compress/mode=0
+compress/mode=2
 compress/high_quality=false
 compress/lossy_quality=0.7
 compress/uastc_level=0

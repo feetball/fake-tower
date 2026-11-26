@@ -4,6 +4,7 @@ extends Label
 ## after every view change, then fades away.
 
 const TEXT := "1 PANEL   2 OUTSIDE   3 PEDESTAL   ·   hold RMB to look   ·   I ATIS   P PLATE   ·   scroll / drag knobs"
+const TOUCH_TEXT := "drag to look   ·   pinch to zoom   ·   double-tap to re-centre   ·   tap or drag cockpit controls"
 
 var _tween: Tween
 

@@ -128,7 +128,7 @@ func refresh() -> void:
 
 	var host := Sess.is_host()
 	_address_head.text = "OTHERS JOIN AT" if host else "CONNECTED TO"
-	var addr_sig := "%s|%s|%s" % [host, host_name, ",".join(local_ipv4_addresses())]
+	var addr_sig := "%s|%s|%s|%s" % [host, host_name, ",".join(local_ipv4_addresses()), Sess.val(&"server_address", "")]
 	if addr_sig != _addr_sig:
 		_addr_sig = addr_sig
 		_fill_addresses(host, host_name)
@@ -139,22 +139,32 @@ func _fill_addresses(host: bool, host_name: String) -> void:
 	for c in _address_box.get_children():
 		c.queue_free()
 	if host:
-		var port := int(UiSettings.get_value("host_port", Sess.default_port()))
+		var port: int = Sess.val(&"listen_port", int(UiSettings.get_value("host_port", Sess.default_port())))
+		var ws_port: int = Sess.val(&"listen_ws_port", 0)
 		var addrs := local_ipv4_addresses()
 		if addrs.is_empty():
 			_address_box.add_child(UiKit.label("No network address found", &"Dim"))
 		for a in addrs:
-			var l := UiKit.label("%s : %d" % [a, port], &"MonoLarge")
-			_address_box.add_child(l)
-		_address_box.add_child(UiKit.label("Same network: use the address above. Over the internet the host must forward UDP port %d." % port, &"Small", true))
+			if port > 0:
+				_address_box.add_child(UiKit.label("%s : %d" % [a, port], &"MonoLarge"))
+			if ws_port > 0:
+				_address_box.add_child(UiKit.label("ws://%s:%d" % [a, ws_port], &"Mono"))
+		var how := "Same network: desktop and phones use the first address, browsers the ws:// one."
+		if ws_port > 0 and port > 0:
+			how += " Over the internet forward UDP %d and TCP %d; browsers on https pages need wss:// through a TLS proxy (see SERVER.md)." % [port, ws_port]
+		_address_box.add_child(UiKit.label(how, &"Small", true))
 	else:
-		var a := str(UiSettings.get_value("join_address", ""))
+		var a: String = Sess.val(&"server_address", "")
+		if a == "":
+			a = str(UiSettings.get_value("join_address", ""))
 		_address_box.add_child(UiKit.label(a if a != "" else host_name, &"MonoLarge"))
-		if a != "":
+		if Sess.server_dedicated():
+			_address_box.add_child(UiKit.label("Dedicated server · lobby leader: %s" % (host_name if host_name != "" else "—"), &"Small"))
+		elif a != "":
 			_address_box.add_child(UiKit.label("Host: %s" % host_name, &"Small"))
 
 
-func _refresh_mic_and_round(host: bool, connected: int, need: int, host_name: String) -> void:
+func _refresh_mic_and_round(_host: bool, connected: int, need: int, host_name: String) -> void:
 	if not Sess.has_voice():
 		_mic_status.text = "Voice is not available in this build."
 		_mic_status.add_theme_color_override(&"font_color", UiTheme.DIM)
@@ -162,17 +172,21 @@ func _refresh_mic_and_round(host: bool, connected: int, need: int, host_name: St
 		_mic_status.text = "Microphone OK — speak to test the meter."
 		_mic_status.add_theme_color_override(&"font_color", UiTheme.ACCENT)
 	else:
-		_mic_status.text = "No microphone — you can listen but not transmit."
+		var why := Sess.mic_status()
+		_mic_status.text = why if why != "" and why != "Microphone not in use." \
+			else "No microphone — you can listen but not transmit."
 		_mic_status.add_theme_color_override(&"font_color", UiTheme.AMBER)
 
-	_start.visible = host
+	var lead := Sess.can_lead()
+	_start.visible = lead
 	var enough := connected >= need
-	_start.disabled = not (host and enough)
-	if host:
+	_start.disabled = not (lead and enough)
+	if lead:
 		_reason.text = "Roles are assigned at random when you start." if enough \
 			else "Waiting for players: %d of %d." % [connected, need]
 	else:
-		_reason.text = "Waiting for the host (%s) to start the round." % (host_name if host_name != "" else "—")
+		_reason.text = "Waiting for the %s (%s) to start the round." % [
+			"lobby leader" if Sess.server_dedicated() else "host", host_name if host_name != "" else "—"]
 
 
 func _player_row(p: Dictionary, is_me: bool) -> HBoxContainer:
@@ -186,7 +200,7 @@ func _player_row(p: Dictionary, is_me: bool) -> HBoxContainer:
 		nm.add_theme_color_override(&"font_color", UiTheme.FAINT)
 	var row := UiKit.hbox(12, [dot, nm])
 	if bool(p.get("host", false)):
-		row.add_child(_badge("HOST", UiTheme.AMBER))
+		row.add_child(_badge("LEADER" if Sess.server_dedicated() else "HOST", UiTheme.AMBER))
 	if is_me:
 		row.add_child(_badge("YOU", UiTheme.BLUE))
 	if not online:

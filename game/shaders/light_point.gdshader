@@ -121,12 +121,35 @@ void fragment() {
 	}
 	vec2 ndc = v_center_clip.xy / v_center_clip.w;
 	float vis = 1.0;
+#if CURRENT_RENDERER == RENDERER_COMPATIBILITY
+	// A lamp just off the bottom of the screen (under the nose) would skip the test and
+	// spread its halo over the instrument panel: test it at the nearest screen edge.
+	if (abs(ndc.x) < 1.6 && abs(ndc.y) < 1.6) {
+		ndc = clamp(ndc, vec2(-0.995), vec2(0.995));
+	}
+#endif
 	if (all(lessThan(abs(ndc), vec2(1.0)))) {
 		float depth = textureLod(depth_tex, ndc * 0.5 + 0.5, 0.0).r;
+#if CURRENT_RENDERER == RENDERER_COMPATIBILITY
+		depth = depth * 2.0 - 1.0; // OpenGL NDC z is -1..1 (Vulkan: 0..1, used as is)
+#endif
 		vec4 scene = INV_PROJECTION_MATRIX * vec4(ndc, depth, 1.0);
 		float scene_z = scene.z / scene.w;
 		float bias = occlusion_bias_m + abs(v_center_z) * 0.002;
+#if CURRENT_RENDERER == RENDERER_COMPATIBILITY
+		// The GLES3 depth buffer (24-bit, not reversed) reconstructs far depths far too
+		// coarsely with the cockpit's 3 cm near plane: lamps on the ground kilometres
+		// away read as occluded. Only clearly nearer geometry (hills, the airframe) hides them.
+		bias += abs(v_center_z) * 0.25;
+#endif
 		vis = smoothstep(bias, 0.0, scene_z - v_center_z);
+#if CURRENT_RENDERER == RENDERER_COMPATIBILITY
+		// That bias must not let near geometry through: a lamp behind the flight deck
+		// (a few metres away) would draw its halo over the instrument panel.
+		if (-scene_z < 12.0 && -v_center_z > 24.0) {
+			vis = 0.0;
+		}
+#endif
 	}
 	if (vis <= 0.0) {
 		discard;

@@ -10,13 +10,36 @@ The game is a standalone Godot 4.5 project in [`game/`](game/) (GDScript, Forwar
 
 ## Get a build
 
-Every CI run that touches `game/` exports a Windows and a Linux build:
+Every CI run that touches `game/` exports the game for each platform. Open the repository's **Actions** tab, pick a run of the **CI** workflow (on `main`, a branch or a pull request) and download from **Artifacts** (kept 3 days). Pushing a tag `v*` (or running the **Release** workflow by hand) attaches the Windows, Linux, macOS, web and Android builds to a GitHub Release.
 
-1. Open the repository's **Actions** tab, pick a run of the **CI** workflow (on `main`, or on a branch or pull request).
-2. Under **Artifacts** download `fake-tower-windows` (contains `FakeTower.exe`, a single file with the data embedded, and `README.txt`) or `fake-tower-linux` (`FakeTower.x86_64` + `FakeTower.pck`, keep them together).
-3. Unzip and run. The Windows build is unsigned, so SmartScreen may need "More info" > "Run anyway".
+| Platform | How to get it | Status |
+| --- | --- | --- |
+| Windows | artifact `fake-tower-windows`: `FakeTower.exe` (data embedded) | Exported in CI; not run on Windows yet. Unsigned: SmartScreen needs "More info" > "Run anyway". |
+| Linux | artifact `fake-tower-linux`: `FakeTower.x86_64` + `FakeTower.pck` (keep together) | Exported and run in CI (headless) and locally (windowed, software Vulkan). |
+| macOS | artifact `fake-tower-macos`: a zip with `Fake Tower.app` (universal, ad-hoc signed) | CI runs the exported app on a `macos-latest` runner, headless (menu, pilot, controller) and once in a real window (screenshot in the `macos-run-output` artifact), plus the unit tests from source. Not notarized: see below. Not yet tried on a player's Mac. |
+| Web | artifact `fake-tower-web` (upload the folder to any static host); optional GitHub Pages deploy (`.github/workflows/pages.yml`) | Exported and tested in headless Chromium in CI (menu, demos, phone touch UI, two browsers playing over WebSocket). Software WebGL only so far; Compatibility renderer, so a simpler look than desktop. |
+| Android | artifact `fake-tower-android`: `FakeTower.apk` (arm64, debug-signed) | Exported in CI and checked with `aapt` (package, permissions, ABI) and `apksigner`. Not yet installed on a device. |
+| iOS | artifact `fake-tower-ios-xcode`: the Xcode project | CI builds it for the iOS simulator with `xcodebuild` (unsigned). Not yet run on a device or simulator; needs your own signing (see below). |
 
-Builds are about 340 MB zipped because the project carries roughly 117 MB of CC0 textures, HDRIs, models and sounds. Pushing a tag `v*` (or running the **Release** workflow by hand) builds both and attaches `fake-tower-<tag>-windows.zip` and `fake-tower-<tag>-linux.zip` to a GitHub Release.
+Sizes: the desktop exports carry about 150 MB of data (2k PBR textures); web, Android and iOS ship the same textures at 1k, so the web `index.pck` is about 68 MB (plus a 38 MB `index.wasm`) and the APK about 96 MB.
+
+**macOS: unsigned app.** The app is ad-hoc signed, not notarized, so Gatekeeper blocks a double-click the first time. Right-click `Fake Tower.app` > **Open** > **Open**, or remove the quarantine flag: `xattr -dr com.apple.quarantine "/Applications/Fake Tower.app"`. Allow microphone access when asked (radio voice).
+
+**Android: sideloading.** Copy `FakeTower.apk` to the phone and open it (allow installs from that app when asked), or `adb install FakeTower.apk`. The CI build is signed with a throwaway debug key: Android refuses to update it in place from a differently signed build, so uninstall first. Release builds use the repository secrets `ANDROID_KEYSTORE_BASE64` / `ANDROID_KEYSTORE_USER` / `ANDROID_KEYSTORE_PASSWORD` when set (see `.github/workflows/release.yml`).
+
+**iOS: needs an Apple developer team and Xcode.** Apple only lets signed apps onto a device. On a Mac with Xcode, either open the CI project, or export it yourself with `IOS_TEAM_ID=<your 10-character team id> game/tools/export_build.sh ios`, then open `FakeTower.xcodeproj`, pick your team under Signing & Capabilities, connect the device and Run.
+
+**Web.** Serve the folder over HTTPS (the microphone needs https or localhost); no special headers are needed (single-threaded build). Locally: `cd fake-tower-web && python3 -m http.server`, then http://localhost:8000/. URL parameters start things directly: `?demo=pilot`, `?demo=controller`, `?join=wss://host&name=Ann`.
+
+### Playing from a browser or a phone
+
+A browser cannot host a game and can only connect over WebSocket; phones usually cannot accept incoming connections. They join either a PC that hosts (a host always listens on UDP 27270 for desktop/phone apps and on WebSocket TCP 27271 for browsers) or a **dedicated server** that is not a player:
+
+```
+godot --headless --path game res://core/net/server.tscn -- --server [--autostart-at=4]
+```
+
+A web page served over `https://` (GitHub Pages, for example) may only open `wss://` connections, so put a TLS reverse proxy (Caddy, two lines) in front of the server's WebSocket port and join `wss://your.host`. Ports, the proxy setup, systemd and what to type in the join box are in [game/SERVER.md](game/SERVER.md); the player-side view is in [game/HOW_TO_PLAY.md](game/HOW_TO_PLAY.md#2-getting-a-game-going).
 
 ## Run from source
 
@@ -36,6 +59,7 @@ Useful launch arguments (after `--`): `--demo=pilot`, `--demo=pilot_far`, `--dem
 - **Start**: the host starts the round from the lobby once at least 4 players are connected. Roles are random; the real controller and the impostor both see the radar, pilots never receive the impostor flag.
 - **Solo practice**: main menu > Solo Practice, an offline round.
 - **Radio**: hold `Space` to talk. One transmitter is heard through a radio filter; two at once block the frequency.
+- **Full guide**: [game/HOW_TO_PLAY.md](game/HOW_TO_PLAY.md) is the player manual for the Godot game: radio, pilot and controller controls, flying the ILS 27, spotting (or playing) the impostor. Builds ship it as `HOW_TO_PLAY.md` next to the executable.
 - **Controls**: pilots use the keyboard autopilot panel (`Left`/`Right` heading, `Up`/`Down` altitude, `PageUp`/`PageDown` speed, `[`/`]` altimeter, `A` approach mode, `G` gear, `F`/`Shift+F` flaps, `I` ATIS, `P` plate); controllers use the mouse on the scope. The full key list is in [game/ARCHITECTURE.md](game/ARCHITECTURE.md#input-actions-registered-in-code-by-session-at-startup) and the in-game How to Play screen.
 
 ## Tests and CI
@@ -50,7 +74,10 @@ game/tests/net_test.sh                                      # 1 host + 3 clients
 game/tests/smoke_test.sh                                    # real main scene headless: menu, pilot, pilot_far, controller
 game/tools/ci_check_log.sh <log>                            # fail on SCRIPT ERROR / Parse Error / failed loads
 pip install gdtoolkit==4.5.0 && gdlint game                 # config: game/gdlintrc
+game/tests/ws_net_test.sh                                   # dedicated server + WebSocket/ENet clients, full rounds
+godot --headless --path game res://ui/touch/dev/touch_sim.tscn -- --touch --sim=pilot   # also --sim=controller
 game/tools/export_build.sh all --zip                        # needs the 4.5.1 export templates; output in build/dist
+game/tools/export_build.sh web && node game/tests/web/web_test.mjs   # browser tests (global playwright + chromium)
 ```
 
 `.github/workflows/ci.yml` is one workflow with a `changes` job that decides which half of the repo is affected. Browser jobs run for root package files, `src/**`, `e2e/**`; game jobs run for `game/**` and the CI definitions. Skipped jobs count as passing; the final **CI OK** job fails if any job failed or was cancelled, so make it the single required status check. It runs on pushes to `main` and `claude/**`, on every pull request, and by hand (`workflow_dispatch`, which runs everything).
@@ -63,8 +90,14 @@ game/tools/export_build.sh all --zip                        # needs the 4.5.1 ex
 | Game - smoke test | main scene headless for 240 frames in menu, `--demo=pilot`, `--demo=pilot_far`, `--demo=controller`; fails if a view scene is missing |
 | Game - GDScript lint | `gdlint` (formatting is reported by `gdformat --check` but not enforced yet) |
 | Game - export | Windows and Linux release exports with the pinned official templates; artifacts `fake-tower-windows`, `fake-tower-linux` |
+| Game - WebSocket / dedicated server test | `ws_net_test.sh`: a headless dedicated server and WebSocket (and one ENet) clients play full rounds |
+| Game - touch UI simulation | `touch_sim.tscn` pilot and controller: real touch events drive the touch UI (also checks the menu fits a 1080-high touch layout) |
+| Game - web export and browser test | web export (fails on files over 95 MB), then `game/tests/web/web_test.mjs` in headless Chromium: menu without console errors, both demos, phone emulation with PTT held while tapping the autopilot strip, two browsers joining a headless dedicated server over WebSocket; artifacts `fake-tower-web`, `web-test-output` |
+| Game - macOS export / macOS run | export on Linux (artifact `fake-tower-macos`), then on `macos-latest`: the exported app headless (menu, pilot, controller), once in a real window with a screenshot (allowed to fail: runner GPUs), and the unit tests from source |
+| Game - Android debug APK | runner Android SDK + JDK 17, generated debug keystore, export, `aapt`/`apksigner` checks; artifact `fake-tower-android` |
+| Game - iOS Xcode project / simulator build | export the Xcode project on Linux (dummy team id), then `xcodebuild -sdk iphonesimulator` unsigned on `macos-latest`; artifact `fake-tower-ios-xcode` |
 
-Godot 4.5.1 and the export templates are downloaded from the official `godot-builds` release, checked against pinned SHA-256 values and cached (`.github/actions/setup-godot`). Everything runs headless, so CI proves logic, scripts, networking and the export, but not how the game looks.
+Godot 4.5.1 and the export templates are downloaded from the official `godot-builds` release, checked against pinned SHA-256 values and cached (`.github/actions/setup-godot`). Almost everything runs headless or with software rendering, so CI proves logic, scripts, networking, the exports and that the web build renders, but not how the game looks or performs on real GPUs. The two macOS jobs run on `macos-latest` (10x minutes on private repositories) and only when `game/` changes.
 
 ## Status / not done yet
 
@@ -73,8 +106,10 @@ Godot 4.5.1 and the export templates are downloaded from the official `godot-bui
 - Single airport (one runway, one ILS approach).
 - The cockpit is procedural: no CC0 cockpit model exists, so panels and instruments are built in code.
 - Rendering has only been verified under software Vulkan so far (no GPU hardware test), so performance and visuals on real GPUs are unconfirmed.
-- Windows builds are unsigned and have no embedded icon; the Windows and Linux exports have been built but only the Linux export has been run (headless).
-- Direct IP over ENet only: no NAT traversal or relay.
+- Windows builds are unsigned and have no embedded icon; the Windows export has not been run on Windows.
+- macOS is not notarized; Android is debug-signed; iOS needs your own Apple team. None of the macOS, Android or iOS builds has been played on real hardware yet (see the platform table above for what CI proves).
+- The web build uses the Compatibility renderer (WebGL 2): depth fog and glow sprites instead of volumetric fog, simpler rain on the glass.
+- Direct IP (ENet over UDP, or WebSocket to a host or dedicated server): no NAT traversal or relay.
 
 ---
 

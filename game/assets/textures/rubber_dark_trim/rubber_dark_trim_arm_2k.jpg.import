@@ -3,19 +3,21 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://bfx0g6xqhpmol"
-path="res://.godot/imported/rubber_dark_trim_arm_2k.jpg-cc2b56b588034aa8f13c9938d97dca0e.ctex"
+path.s3tc="res://.godot/imported/rubber_dark_trim_arm_2k.jpg-cc2b56b588034aa8f13c9938d97dca0e.s3tc.ctex"
+path.etc2="res://.godot/imported/rubber_dark_trim_arm_2k.jpg-cc2b56b588034aa8f13c9938d97dca0e.etc2.ctex"
 metadata={
-"vram_texture": false
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
+"vram_texture": true
 }
 
 [deps]
 
 source_file="res://assets/textures/rubber_dark_trim/rubber_dark_trim_arm_2k.jpg"
-dest_files=["res://.godot/imported/rubber_dark_trim_arm_2k.jpg-cc2b56b588034aa8f13c9938d97dca0e.ctex"]
+dest_files=["res://.godot/imported/rubber_dark_trim_arm_2k.jpg-cc2b56b588034aa8f13c9938d97dca0e.s3tc.ctex", "res://.godot/imported/rubber_dark_trim_arm_2k.jpg-cc2b56b588034aa8f13c9938d97dca0e.etc2.ctex"]
 
 [params]
 
-compress/mode=0
+compress/mode=2
 compress/high_quality=false
 compress/lossy_quality=0.7
 compress/uastc_level=0

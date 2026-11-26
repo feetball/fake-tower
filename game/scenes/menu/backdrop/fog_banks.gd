@@ -3,6 +3,8 @@ extends FogVolume
 ## Patchy ground fog: a large, shallow FogVolume with 3D noise density that
 ## drifts slowly with the wind, so the volumetric fog has visible structure
 ## (needs Environment.volumetric_fog_enabled). Origin = centre of the layer.
+## Inert (no material, no drift) where the renderer has no volumetric fog: fog
+## shaders do not compile under Compatibility.
 
 @export var extent := Vector3(4000.0, 70.0, 4000.0)
 @export var density := 0.028
@@ -16,6 +18,10 @@ var _t := 0.0
 
 
 func _ready() -> void:
+	if not RenderCaps.has_fog_volumes():
+		visible = false
+		set_process(false)
+		return
 	size = extent
 	shape = RenderingServer.FOG_VOLUME_SHAPE_BOX
 	var noise := FastNoiseLite.new()

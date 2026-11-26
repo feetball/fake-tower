@@ -2,7 +2,8 @@ class_name UiTheme
 extends RefCounted
 ## Shared look for the shell: dark smoked glass, hairline borders, a phosphor
 ## green accent, Inter-like sans and a monospace for avionics-style text.
-## Fonts are SystemFonts with fallbacks (no font files are shipped).
+## Fonts are SystemFonts with fallbacks; Inter and JetBrains Mono are bundled for
+## systems that lack them (BundledFonts).
 ##
 ## Theme type variations (set Control.theme_type_variation):
 ##   Label:  Title, Tagline, Heading, Dim, Small, Mono, MonoSmall, MonoLarge
@@ -71,7 +72,7 @@ static func _system_font(kind: String, names: PackedStringArray, weight: int) ->
 		f.hinting = TextServer.HINTING_LIGHT
 		f.subpixel_positioning = TextServer.SUBPIXEL_POSITIONING_AUTO
 		f.allow_system_fallback = true
-		_fonts[key] = f
+		_fonts[key] = BundledFonts.or_system(f)
 	return _fonts[key]
 
 

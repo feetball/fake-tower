@@ -26,6 +26,9 @@ func _ready() -> void:
 	_ui.add_child(_howto)
 	Sess.connect_signal(&"phase_changed", func(_p: String) -> void: sync())
 	Sess.connect_signal(&"lobby_changed", sync)
+	if TouchMode.active():
+		# Finger-sized rows (≈5 mm at 6": the column has no room for more).
+		TouchMode.enlarge_targets(_ui, 72.0)
 	sync()
 
 
@@ -62,6 +65,11 @@ func main_panel() -> MainMenuPanel:
 	return _main
 
 
+## True while an overlay (How to Play) covers the menu.
+func is_overlay_open() -> bool:
+	return _howto.visible
+
+
 ## True when Esc was consumed by closing an overlay inside the menu.
 func close_overlay() -> bool:
 	if _howto.visible:
@@ -91,16 +99,25 @@ func _build_how_to_play() -> Control:
 		UiKit.button("Close", &"Ghost", close_overlay)])
 	body.add_child(head)
 	body.add_child(UiKit.hsep())
+	# Everything below the header scrolls, so the overlay fits any window height.
+	var scroll := ScrollContainer.new()
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	var inner := UiKit.vbox(20)
+	inner.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	var win := UiKit.label("The round ends when no aircraft is still flying. The tower (real controller and pilots) wins if more than half the aircraft land; otherwise the impostor wins.", &"", true)
-	body.add_child(win)
-	body.add_child(HowToPlay.build(false))
+	inner.add_child(win)
+	inner.add_child(HowToPlay.build(false))
+	inner.add_child(UiKit.hsep())
+	inner.add_child(HowToPlay.build_controls())
+	scroll.add_child(inner)
+	body.add_child(scroll)
 	var panel := UiKit.panel(&"Glass", body)
-	panel.set_anchors_preset(Control.PRESET_TOP_RIGHT)
-	panel.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+	panel.set_anchors_preset(Control.PRESET_RIGHT_WIDE)
 	panel.offset_left = -930.0
-	panel.offset_right = -110.0
-	panel.offset_top = 150.0
-	panel.offset_bottom = 150.0
+	panel.offset_right = -70.0
+	panel.offset_top = 60.0
+	panel.offset_bottom = -60.0
 	root.add_child(panel)
 	root.visible = false
 	return root

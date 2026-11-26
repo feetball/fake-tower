@@ -14,6 +14,15 @@ const LIGHT_EXTINCTION := 0.6
 ## distance as d^-POINT_FALLOFF once unresolved, so rows of lights recede.
 const POINT_FALLOFF := 0.45
 const AIRFIELD_INTENSITY := 2.6
+## Without volumetric fog (Mobile, Compatibility): how much of the volumetric medium
+## the depth fog takes over, and the colour of that fog below / inside the cloud
+## (standing in for the medium lit by the town glow and by the aircraft's own lights).
+const FALLBACK_FOG_GAIN := 1.0
+const FALLBACK_FOG_CLEAR := Color(0.13, 0.125, 0.12)
+const FALLBACK_FOG_CLOUD := Color(0.15, 0.16, 0.18)
+## ... and how much stronger the airfield lamps' halos and aureoles are under Compatibility.
+const FALLBACK_HALO_GAIN := 1.8
+const FALLBACK_AUREOLE_GAIN := 4.0
 
 var world_root: Node3D
 var env: Environment
@@ -97,17 +106,19 @@ func set_quality(q: String) -> void:
 	if _cloud_base != null:
 		_cloud_base.multimesh.visible_instance_count = _cloud_base.count if q != "low" else _cloud_base.count / 2
 	if env != null:
-		env.volumetric_fog_enabled = _volumetric
+		# Mobile / Compatibility: no volumetric fog, _update_fog thickens the depth fog instead.
+		env.volumetric_fog_enabled = _volumetric and RenderCaps.has_volumetric_fog()
 		# SSR plus SubViewport displays crashes the llvmpipe software rasterizer
 		# (used for off-screen screenshots); real GPUs keep it on high.
-		env.ssr_enabled = q == "high" and not is_software_renderer()
+		env.ssr_enabled = q == "high" and RenderCaps.has_ssr()
 		env.volumetric_fog_length = 900.0 if q == "high" else 500.0
 	if _fog_banks != null:
-		_fog_banks.visible = q == "high"
+		_fog_banks.visible = q == "high" and RenderCaps.has_fog_volumes()
+	_last_sigma = -1.0
 
 
 static func is_software_renderer() -> bool:
-	return RenderingServer.get_video_adapter_name().to_lower().contains("llvmpipe")
+	return RenderCaps.is_software()
 
 
 func set_eye(eye: Vector3) -> void:
@@ -116,13 +127,18 @@ func set_eye(eye: Vector3) -> void:
 	_update_fog()
 
 
+## Eye height above the field in feet (as of the last set_eye).
+func eye_height_ft() -> float:
+	return _eye_h_ft
+
+
 ## Extinction per metre of the air around the eye (drives the landing-light shafts).
 func scatter_at_eye() -> float:
 	return weather.sigma_at(maxf(_eye_h_ft, 0.0))
 
 
 func _make_environment() -> Environment:
-	var e := NightEnvironment.make(weather.visibility_m, 1.0, true, not is_software_renderer())
+	var e := NightEnvironment.make(weather.visibility_m, 1.0, true, RenderCaps.has_ssr())
 	e.background_energy_multiplier = 0.35
 	e.ambient_light_energy = 0.75
 	# Night fog over a lit town and airfield glows faintly warm-grey.
@@ -149,6 +165,7 @@ func _make_environment() -> Environment:
 	for i in levels.size():
 		e.set_glow_level(i, levels[i])
 	e.ssao_enabled = false
+	RenderCaps.adapt_glow(e)
 	return e
 
 
@@ -165,6 +182,9 @@ func _update_fog() -> void:
 	# adds the local medium around the aircraft that the lights scatter in.
 	env.fog_density = ground_sigma * 0.55
 	env.volumetric_fog_density = local_sigma * 0.9
+	if not env.volumetric_fog_enabled:
+		env.fog_density += RenderCaps.fallback_density(local_sigma * 0.9) * FALLBACK_FOG_GAIN
+		env.fog_light_color = FALLBACK_FOG_CLEAR.lerp(FALLBACK_FOG_CLOUD, in_cloud)
 	# Lights are seen much further than dark objects (Allard vs Koschmieder).
 	for lp in _airport_lights:
 		lp.extinction_per_m = ground_sigma * LIGHT_EXTINCTION
@@ -197,6 +217,14 @@ func _collect_airport_lights() -> void:
 		lp.min_core_angle = 0.0019
 		lp.aureole_gain = 0.002
 		lp.aureole_angle = 0.011
+		if RenderCaps.is_compatibility():
+			# No volumetric medium to glow in, and GLES3 tone-maps each additive layer on
+			# its own (faint halos vanish): wider, stronger scattering halos and aureoles
+			# carry the "lamps in fog" look on the web.
+			lp.halo_gain *= FALLBACK_HALO_GAIN
+			lp.min_halo_angle = 0.028
+			lp.aureole_gain = 0.002 * FALLBACK_AUREOLE_GAIN
+			lp.aureole_angle = 0.016
 	_last_sigma = -1.0
 
 
