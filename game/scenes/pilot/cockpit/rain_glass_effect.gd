@@ -7,10 +7,13 @@ extends CompositorEffect
 ## result. Pixels nearer than the glass (the cockpit interior) are left alone,
 ## using the depth buffer. Drop positions are fixed in the aircraft frame
 ## (azimuth/elevation of the view ray), so they stay on the glass when the
-## pilot looks around. Forward+ only (RenderCaps.has_compute_effects): inert without
-## a RenderingDevice (headless, Compatibility), and not used on Mobile, whose 3D
-## buffer is not the rgba16f image this pass binds.
+## pilot looks around. The water itself (beads, drops running up the glass with their
+## trails) is shaders/rain_water.gdshaderinc, shared with the pane shader. Forward+
+## only (RenderCaps.has_compute_effects): inert without a RenderingDevice (headless,
+## Compatibility), and not used on Mobile, whose 3D buffer is not the rgba16f image
+## this pass binds.
 
+const WATER: ShaderInclude = preload("res://shaders/rain_water.gdshaderinc")
 const CONTEXT := &"rain_glass"
 const COPY := &"copy"
 const GROUP := 8
@@ -30,20 +33,8 @@ layout(push_constant, std430) uniform Params {
 	vec4 bz;
 	vec4 a;    // width, height, time, rain 0..1
 	vec4 b;    // airspeed kt, mode (0 copy, 1 apply), projection z.z, projection w.z
-	vec4 c;    // tan half fov x, tan half fov y, px per radian, unused
+	vec4 c;    // tan half fov x, tan half fov y, px per radian, water travel (m of glass)
 } p;
-
-float hash12(vec2 q) {
-	vec3 p3 = fract(vec3(q.xyx) * 0.1031);
-	p3 += dot(p3, p3.yzx + 33.33);
-	return fract((p3.x + p3.y) * p3.z);
-}
-
-vec2 hash22(vec2 q) {
-	vec3 p3 = fract(vec3(q.xyx) * vec3(0.1031, 0.1030, 0.0973));
-	p3 += dot(p3, p3.yzx + 33.33);
-	return fract((p3.xx + p3.yz) * p3.zy);
-}
 
 vec3 fetch(vec2 pos) {
 	vec2 size = p.a.xy;
@@ -62,62 +53,7 @@ vec3 soft(vec2 pos, float r) {
 		+ fetch(pos + vec2(0.0, r)) + fetch(pos - vec2(0.0, r))) / 6.0;
 }
 
-// Beading drops sitting on the glass (they creep and occasionally run).
-// g: glass coordinates in metres (flow frame: y = downstream). Returns (normal xy, coverage).
-vec3 beads(vec2 g, float cell, float density, float t, float creep) {
-	vec2 gv = g / cell;
-	vec2 id0 = floor(gv);
-	vec3 best = vec3(0.0);
-	for (int j = -1; j <= 1; j++) {
-		for (int i = -1; i <= 1; i++) {
-			vec2 id = id0 + vec2(float(i), float(j));
-			vec2 h = hash22(id + 3.1);
-			if (h.x > density) {
-				continue;
-			}
-			float life = fract(t * (0.05 + 0.07 * h.y) + h.x * 9.0);
-			vec2 ctr = id + 0.5 + (hash22(id * 1.37 + 7.0) - 0.5) * 0.6;
-			ctr.y += creep * life * life * 1.6;
-			float r = mix(0.16, 0.42, hash12(id + 5.3)) * smoothstep(0.0, 0.1, life) * (1.0 - smoothstep(0.85, 1.0, life));
-			vec2 d = gv - ctr;
-			d.y /= 1.0 + creep * life * 0.8;
-			float l = length(d) / max(r, 1e-3);
-			float m = smoothstep(1.0, 0.82, l);
-			if (m > best.z) {
-				best = vec3(d / max(r, 1e-3), m);
-			}
-		}
-	}
-	return best;
-}
-
-// Rivulets: drops racing downstream in loose columns, each with a thin wet trail.
-vec3 rivulets(vec2 g, float t, float speed, float density) {
-	float colw = 0.014;
-	float x = g.x / colw;
-	float id = floor(x);
-	float fx = fract(x) - 0.5;
-	float h = hash12(vec2(id, 4.7));
-	if (h > density) {
-		return vec3(0.0);
-	}
-	float h2 = hash12(vec2(id, 9.2));
-	float period = 0.18 + 0.25 * h2;
-	float y = g.y / period - t * speed * (0.6 + 0.8 * h) / period - h * 17.0;
-	float cy = fract(y);
-	// Head at cy ~ 0.9, trail behind it (smaller cy).
-	float wob = (hash12(vec2(id, floor(y))) - 0.5) * 0.5;
-	float xo = fx - wob * 0.4;
-	float head_r = 0.22 + 0.12 * h2;
-	vec2 dh = vec2(xo, (cy - 0.9) * period / colw * 0.55) / head_r;
-	float head = smoothstep(1.0, 0.8, length(dh));
-	float trail = smoothstep(0.9, 0.35, cy) * smoothstep(0.1, 0.5, cy);
-	float tw = smoothstep(0.14, 0.04, abs(xo)) * trail * 0.55;
-	if (head >= tw) {
-		return vec3(dh, head);
-	}
-	return vec3(xo / 0.14, 0.0, tw);
-}
+%WATER%
 
 void main() {
 	ivec2 px = ivec2(gl_GlobalInvocationID.xy);
@@ -150,16 +86,7 @@ void main() {
 	// Airflow drives the water up the front panes and back along the side ones.
 	vec2 flow = normalize(vec2(sign(g.x) * (0.25 + 1.6 * smoothstep(0.35, 0.95, abs(g.x))), 1.0));
 	vec2 fg = vec2(dot(g, vec2(flow.y, -flow.x)), dot(g, flow));
-	vec3 b1 = beads(fg, 0.016, 0.06 + 0.6 * rain, t, spd);
-	vec3 b2 = beads(fg * 1.8 + 11.0, 0.016, 0.05 + 0.35 * rain, t * 1.3, spd);
-	vec3 rv = rivulets(fg, t, 0.35 + 0.9 * spd, 0.12 + 0.55 * rain * smoothstep(0.2, 0.7, spd));
-	vec3 w = b1;
-	if (b2.z > w.z) {
-		w = b2;
-	}
-	if (rv.z > w.z) {
-		w = rv;
-	}
+	vec3 w = water_on_glass(fg, t, p.c.w, rain, spd);
 	vec3 orig = imageLoad(copy_image, px).rgb;
 	if (w.z <= 0.001) {
 		return;
@@ -167,9 +94,11 @@ void main() {
 	vec2 n = w.xy;
 	float nl = clamp(length(n), 0.0, 1.0);
 	float ppr = p.c.z;
+	// The surface normal is in the flow frame: turn it back to the glass (azimuth, elevation).
+	vec2 ng = n.x * vec2(flow.y, -flow.x) + n.y * flow;
 	// A drop is a tiny fisheye: it shows a wide, inverted, slightly blurred view
 	// of what is behind it, gathering nearby lights into bright sparkles.
-	vec2 offs = vec2(-n.x, n.y) * ppr * 0.028;
+	vec2 offs = vec2(-ng.x, ng.y) * ppr * 0.028;
 	vec3 refr = soft(vec2(px) + 0.5 + offs, 1.6);
 	vec3 refr2 = soft(vec2(px) + 0.5 + offs * 1.8, 2.5);
 	refr = max(refr, refr2 * 0.6) * 1.08;
@@ -187,6 +116,9 @@ var airspeed_kt := 140.0
 ## The aircraft's global basis (drops are fixed to the glass, i.e. to it).
 var aircraft_basis := Basis.IDENTITY
 var time_s := 0.0
+## Metres of glass the airflow has carried a reference drop since the start: the clock the
+## running drops move by (CockpitWindshield integrates it from the airspeed).
+var water_travel := 0.0
 
 var _rd: RenderingDevice
 var _shader := RID()
@@ -218,7 +150,7 @@ func _notification(what: int) -> void:
 func _create() -> void:
 	var src := RDShaderSource.new()
 	src.language = RenderingDevice.SHADER_LANGUAGE_GLSL
-	src.source_compute = GLSL.replace("%INTERIOR%", "%.2f" % INTERIOR_M)
+	src.source_compute = GLSL.replace("%WATER%", WATER.code).replace("%INTERIOR%", "%.2f" % INTERIOR_M)
 	var spirv := _rd.shader_compile_spirv_from_source(src)
 	if spirv.compile_error_compute != "":
 		push_error("RainGlassEffect: " + spirv.compile_error_compute)
@@ -257,7 +189,7 @@ func _render_callback(callback_type: int, render_data: RenderData) -> void:
 		b.z.x, b.z.y, b.z.z, 0.0,
 		float(size.x), float(size.y), time_s, rain,
 		airspeed_kt, 0.0, proj.z.z, proj.w.z,
-		1.0 / absf(proj.x.x), tan_y, float(size.y) * 0.5 / tan_y, 0.0,
+		1.0 / absf(proj.x.x), tan_y, float(size.y) * 0.5 / tan_y, water_travel,
 	])
 	var groups := Vector2i(ceili(size.x / float(GROUP)), ceili(size.y / float(GROUP)))
 	for view in buffers.get_view_count():

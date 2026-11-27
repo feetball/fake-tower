@@ -6,14 +6,34 @@ extends Node3D
 ## screen-texture drops. The panes always add a faint wet film, and the lit
 ## displays reflect faintly in the front panes. The view feeds airspeed and
 ## how wet it is (cloud, drizzle) every frame.
+##
+## The drops run with the airflow. How far it has carried water since the start
+## (water_travel) is integrated here from the airspeed and handed to both
+## drawing paths, so the drops speed up, slow down and stop with the aircraft.
 
 const SHADER: Shader = preload("res://shaders/pilot_windshield.gdshader")
 const REFLECTION_SHADER: Shader = preload("res://shaders/pilot_glass_reflection.gdshader")
+## The airflow's pull on water on the glass is its dynamic pressure, which goes with
+## IAS squared: FLOW_REF_MPS metres of glass per second at FLOW_REF_KT (a reference
+## drop; the shaders run bigger and smaller drops faster and slower). Below the
+## pinning share of that pressure the drops hold where they are.
+const FLOW_REF_KT := 140.0
+const FLOW_REF_MPS := 0.45
+const FLOW_PIN := 0.06
 
 var material: ShaderMaterial
 ## Null where compute effects are unavailable.
 var effect: RainGlassEffect
+## Metres of glass the airflow has carried a reference drop so far (see flow_speed).
+var water_travel := 0.0
 var _t := 0.0
+var _ias := 0.0
+
+
+## How fast the airflow carries a reference drop over the glass (m/s) at this indicated airspeed.
+static func flow_speed(ias_kt: float) -> float:
+	var q := ias_kt * ias_kt / (FLOW_REF_KT * FLOW_REF_KT)
+	return FLOW_REF_MPS * maxf(q - FLOW_PIN, 0.0)
 
 
 func _ready() -> void:
@@ -51,9 +71,12 @@ func attach(camera: Camera3D) -> void:
 ## Keep the drops fixed to the glass: they live in the aircraft frame.
 func update_view(aircraft_basis: Basis, delta: float) -> void:
 	_t += delta
+	water_travel += flow_speed(_ias) * delta
+	material.set_shader_parameter(&"water_travel", water_travel)
 	if effect != null:
 		effect.aircraft_basis = aircraft_basis
 		effect.time_s = _t
+		effect.water_travel = water_travel
 
 
 ## Virtual images of the displays in the front pane on their side: each
@@ -97,6 +120,7 @@ static func _quad(pts: Array[Vector3]) -> ArrayMesh:
 
 
 func set_conditions(wetness: float, airspeed_kt: float) -> void:
+	_ias = airspeed_kt
 	material.set_shader_parameter(&"rain", clampf(wetness, 0.0, 1.0))
 	material.set_shader_parameter(&"airspeed", airspeed_kt)
 	if effect != null:

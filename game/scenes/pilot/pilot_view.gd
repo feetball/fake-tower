@@ -12,6 +12,7 @@ extends Node3D
 ##   --pilot-view=panel|outside|pedestal   --pilot-efb=plate|atis
 ##   --pilot-debug-warn=TERRAIN,PULL UP    --pilot-debug-outcome=<outcome>
 ##   --pilot-debug-wx=<visibility_m>,<ceiling_ft>   --pilot-quality=low|medium|high
+##   --pilot-debug-rain=<wetness 0..1>[,<ias_kt>]  force the water on the windshield
 ##   --pilot-debug-light (work light)      --pilot-debug-hover=<x>,<y> (fake mouse)
 
 const COCKPIT_LAYER := 2 ## render layer bit for the flight deck (exterior lights skip it)
@@ -42,6 +43,8 @@ const LANDED_CAPTION_KT := 40.0
 
 var _landed_t := -1.0
 var _fuel_cut_t := -1.0
+## --pilot-debug-rain: (wetness, IAS kt) forced onto the windshield; negative = from the flight.
+var _debug_rain := Vector2(-1.0, -1.0)
 ## The text radio panel (scenes/pilot/datalink), over the EFB and the crash cut: a
 ## crashed pilot can no longer transmit, but still hears the frequency.
 var datalink: PilotDatalink
@@ -99,7 +102,12 @@ func _process(delta: float) -> void:
 	rig.turbulence = 0.12 + cloud * 0.7 if not flight.on_ground else clampf(flight.gs / 140.0, 0.0, 1.0) * 0.5
 	rig.update_motion(delta, flight.bank)
 	var wet := 0.22 + 0.78 * cloud
-	cockpit.windshield.set_conditions(wet, bus.ias)
+	var ias := bus.ias
+	if _debug_rain.x >= 0.0:
+		wet = _debug_rain.x
+	if _debug_rain.y >= 0.0:
+		ias = _debug_rain.y
+	cockpit.windshield.set_conditions(wet, ias)
 	cockpit.windshield.update_view(aircraft.global_basis, delta)
 	ext_lights.height_m = outside.eye_height_ft() * World.FT_TO_M
 	ext_lights.set_conditions(outside.scatter_at_eye(), cloud, flight.gs * 0.5144)
@@ -243,6 +251,12 @@ func _apply_debug_args() -> void:
 		var w := wx.split(",")
 		if w.size() >= 2:
 			outside.debug_weather(float(w[0]), float(w[1]))
+	var rain := _arg("--pilot-debug-rain=")
+	if rain != "":
+		var r := rain.split(",")
+		_debug_rain.x = clampf(float(r[0]), 0.0, 1.0)
+		if r.size() >= 2:
+			_debug_rain.y = maxf(float(r[1]), 0.0)
 	var warn := _arg("--pilot-debug-warn=")
 	if warn != "":
 		bus.debug_warnings = Array(warn.split(","))
