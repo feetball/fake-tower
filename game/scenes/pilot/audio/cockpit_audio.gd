@@ -117,6 +117,8 @@ func _fill() -> void:
 	var wind_cut := 0.04 + _wind * 0.1
 	var rain_rate := wetness * (0.3 + _wind) * 0.004
 	var motor_g := _motor * 0.06
+	# Settings > Ambient noise scales the flight-deck sound; alerts and the crash stay full.
+	var ambient := _master * UiSettings.ambient_volume()
 	for i in n:
 		var white := randf() * 2.0 - 1.0
 		# Engine: low rumble (heavily filtered noise) + fan tone + core hum.
@@ -149,7 +151,7 @@ func _fill() -> void:
 			_lp_boom += (white - _lp_boom) * 0.006
 			boom = _lp_boom * 9.0 * _boom
 			_boom *= 0.99985
-		var s := (engine * eng_g + wind * wind_g + rain * wetness + ground + motor + trans) * _master
+		var s := (engine * eng_g + wind * wind_g + rain * wetness + ground + motor + trans) * ambient
 		s += boom + alerts.sample() * (1.0 if _master > 0.0 else 0.0)
 		s = clampf(s, -1.0, 1.0)
 		buf[i] = Vector2(s, s)

@@ -49,10 +49,10 @@ Everyone knows which two players are controllers. Only the two controllers know 
 | **Join Game** | Opens the address form. Type the host's IP address and the port (27270 unless the host changed it), then Connect. In a browser the form is always open and the port defaults to 27271 (WebSocket). |
 | **Solo Practice** | Offline rounds against AI players, which talk on the text radio: **Fly with an AI tower**, **Spot the impostor**, **Be the controller** and **Free flight** (see *Solo practice* below). |
 | **How to Play** | The rules and controls overlay. Esc closes it. |
-| **Settings** | Master volume, fullscreen, reading the text radio aloud, leave game, quit. |
+| **Settings** | Volume (**Master**, **Ambient noise**, **Radio / ATC voice**), fullscreen, reading the text radio aloud, leave game, quit. |
 | **Quit** | Closes the game. Not shown in a browser or on iPhone/iPad (close the tab or swipe the app away). |
 
-Enter your name first (up to 16 characters). Esc opens Settings at any time, including during a round. **The game does not pause.** On a touchscreen, the **MENU** button (top right) opens Settings instead; see section 10.
+Enter your name first (up to 16 characters). Esc opens Settings at any time, including during a round. **The game does not pause.** The three volume sliders work separately: **Ambient noise** is the flight-deck sound (engines, slipstream, rain, gear and flaps; aural warnings always stay at full volume) and **Radio / ATC voice** is everything on the frequency (voices, static and the text radio read aloud). On a touchscreen, the **MENU** button (top right) opens Settings instead; see section 10.
 
 **Hosting**
 
@@ -155,7 +155,7 @@ The reply buttons only show while an instruction for you is waiting for an answe
 
 The line under it shows exactly what will go out; a QNH that is not the ATIS one shows in amber. Items that cannot go together (a heading with a 360, CLEARED ILS with GO AROUND…) grey out SEND and say why. **SEND** sends it; while three of your messages are still waiting it keeps what you composed and says the frequency is busy. A blocked or unsent message of yours gets **RESEND** in the FREQUENCY tab. Below, **ALL STATIONS**: broadcast the ATIS letter and QNH, or **CALL OUT** the other controller. With `ALT` and `CLEARED ILS` together the message reads "maintain 5500 until established on the localizer, cleared ILS approach".
 
-**Read aloud.** With **Read text-radio messages aloud** on in Settings (on by default where the system has text-to-speech), every message from someone else is spoken by the system's voices, one voice per person, so the two controllers sound different. Your own messages are not read back. These voices do not go through the radio filter.
+**Read aloud.** With **Read text-radio messages aloud** on in Settings (on by default where the system has text-to-speech), every message from someone else is spoken by the system's voices, one voice per person, so the two controllers sound different. Your own messages are not read back. These voices do not go through the radio filter. Their loudness follows **Radio / ATC voice** in Settings (with Master).
 
 ---
 
@@ -678,7 +678,7 @@ You can use two hands at once: holding **PTT** with one thumb does not stop the 
 | Touch | What it does |
 | --- | --- |
 | Hold **PTT** (bottom right, during a round) | Push-to-talk. Release to stop. It shows TX, RECEIVING, BLOCKED or RADIO DEAD. |
-| **MENU** (top right; in the top strip during a round) | Settings: volume, fullscreen, reading the text radio aloud, leave game, quit. Same as Esc. |
+| **MENU** (top right; in the top strip during a round) | Settings: volume (master, ambient noise, radio / ATC voice), fullscreen, reading the text radio aloud, leave game, quit. Same as Esc. |
 | Tap a text field | Opens the on-screen keyboard. The screen slides up so the field stays visible. |
 
 **Pilot**

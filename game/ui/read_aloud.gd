@@ -51,7 +51,9 @@ func _on_datalink(m: Dictionary) -> void:
 	if int(m.get("from", 0)) == Sess.my_id() or bool(Sess.val(&"fast_forward", false)):
 		return
 	var v := _voice_for(int(m.get("from", 0)))
-	var volume := clampi(int(round(UiSettings.volume() * 100.0)), 0, 100)
+	var volume := UiSettings.read_aloud_volume()
+	if volume <= 0:
+		return
 	DisplayServer.tts_speak(_spoken(String(m["text"])), String(v[0]), volume, float(v[1]), RATE)
 
 
