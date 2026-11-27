@@ -1,14 +1,16 @@
 class_name SettingsPanel
 extends Control
-## Esc panel: master volume, fullscreen, leave game, quit. Owned by main.gd and
-## also opened from the main menu's Settings item. Does not pause the tree
-## (the round is networked and keeps running).
+## Esc panel: volume (master, ambient noise, radio / ATC voice), fullscreen,
+## reading the text radio aloud, leave game, quit. Owned by main.gd and also
+## opened from the main menu's Settings item. Does not pause the tree (the round
+## is networked and keeps running), so the sliders take effect as they move.
 
 signal closed
 signal leave_requested
 
 var _volume: HSlider
-var _volume_value: Label
+var _ambient: HSlider
+var _radio: HSlider
 var _fullscreen: CheckButton
 var _read_aloud: CheckButton
 var _leave: Button
@@ -39,18 +41,20 @@ func _ready() -> void:
 	body.add_child(_title)
 	body.add_child(UiKit.hsep())
 
-	body.add_child(UiKit.heading("Master volume"))
-	_volume = HSlider.new()
-	_volume.min_value = 0.0
-	_volume.max_value = 1.0
-	_volume.step = 0.01
-	_volume.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_volume.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	_volume.value_changed.connect(_on_volume)
-	_volume_value = UiKit.label("", &"Mono")
-	_volume_value.custom_minimum_size = Vector2(64.0, 0.0)
-	_volume_value.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	body.add_child(UiKit.hbox(16, [_volume, _volume_value]))
+	body.add_child(UiKit.heading("Volume"))
+	var grid := GridContainer.new()
+	grid.columns = 3
+	grid.add_theme_constant_override(&"h_separation", 16)
+	grid.add_theme_constant_override(&"v_separation", 10)
+	body.add_child(grid)
+	_volume = _slider_row(grid, "Master", "Everything the game plays.",
+		func(v: float) -> void: UiSettings.apply_volume(v))
+	_ambient = _slider_row(grid, "Ambient noise",
+		"Flight-deck sound: engines, slipstream, rain, gear and flaps. Warnings stay at full volume.",
+		func(v: float) -> void: UiSettings.set_ambient_volume(v))
+	_radio = _slider_row(grid, "Radio / ATC voice",
+		"Everything on the frequency: the voices, radio static, and the text radio read aloud.",
+		func(v: float) -> void: UiSettings.apply_radio_volume(v))
 
 	_fullscreen = CheckButton.new()
 	_fullscreen.text = "Fullscreen"
@@ -86,13 +90,15 @@ func _ready() -> void:
 func open(in_game: bool) -> void:
 	_title.text = "Paused" if in_game else "Settings"
 	_leave.visible = in_game
-	_volume.set_value_no_signal(UiSettings.volume())
-	_volume_value.text = "%d%%" % int(round(UiSettings.volume() * 100.0))
+	_show(_volume, UiSettings.volume())
+	_show(_ambient, UiSettings.ambient_volume())
+	_show(_radio, UiSettings.radio_volume())
 	_fullscreen.set_pressed_no_signal(DisplayServer.window_get_mode() == DisplayServer.WINDOW_MODE_FULLSCREEN
 		or UiSettings.fullscreen())
 	_read_aloud.set_pressed_no_signal(UiSettings.read_aloud() and ReadAloud.available())
 	visible = true
-	_volume.grab_focus()
+	if is_inside_tree():
+		_volume.grab_focus()
 
 
 func close() -> void:
@@ -102,6 +108,35 @@ func close() -> void:
 	closed.emit()
 
 
-func _on_volume(v: float) -> void:
-	_volume_value.text = "%d%%" % int(round(v * 100.0))
-	UiSettings.apply_volume(v)
+## One "name | slider | 80%" row of the volume grid; `apply` gets 0..1 as it moves.
+func _slider_row(grid: GridContainer, title: String, tip: String, apply: Callable) -> HSlider:
+	var name_label := UiKit.label(title, &"")
+	name_label.tooltip_text = tip
+	name_label.mouse_filter = Control.MOUSE_FILTER_PASS
+	grid.add_child(name_label)
+	var slider := HSlider.new()
+	slider.min_value = 0.0
+	slider.max_value = 1.0
+	slider.step = 0.01
+	slider.tooltip_text = tip
+	slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	slider.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	grid.add_child(slider)
+	var value := UiKit.label("", &"Mono")
+	value.custom_minimum_size = Vector2(64.0, 0.0)
+	value.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	grid.add_child(value)
+	slider.set_meta(&"value_label", value)
+	slider.value_changed.connect(func(v: float) -> void:
+		value.text = _pct(v)
+		apply.call(v))
+	return slider
+
+
+func _show(slider: HSlider, v: float) -> void:
+	slider.set_value_no_signal(v)
+	(slider.get_meta(&"value_label") as Label).text = _pct(v)
+
+
+static func _pct(v: float) -> String:
+	return "%d%%" % int(round(v * 100.0))
