@@ -249,6 +249,9 @@ async function testDemo(browser, base) {
           'an AI pilot checking in on the text radio',
           240000,
         );
+      // A slow runner may still be fading the view in after a fixed pause: first let the
+      // round clock run a few seconds (frames rendered, fade done; debug-state `t`).
+      await waitState(g.page, (x) => x.t >= 4, `the ${demo} view rendering`, 240000);
       await sleep(role === 'pilot' ? 8000 : 5000);
       await shot(g.page, `web_demo_${demo}`);
       noErrors(g);
