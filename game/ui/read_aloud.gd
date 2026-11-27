@@ -39,8 +39,13 @@ static func stop() -> void:
 
 
 func _on_datalink(m: Dictionary) -> void:
-	if not UiSettings.read_aloud() or _voices.is_empty():
+	if not UiSettings.read_aloud() or not available():
 		return
+	if _voices.is_empty():
+		# Browsers load their voices after start-up: ask again when there is something to say.
+		_voices = DisplayServer.tts_get_voices_for_language("en")
+		if _voices.is_empty():
+			return
 	if String(m.get("status", "")) != "ok" or String(m.get("text", "")) == "":
 		return
 	if int(m.get("from", 0)) == Sess.my_id() or bool(Sess.val(&"fast_forward", false)):

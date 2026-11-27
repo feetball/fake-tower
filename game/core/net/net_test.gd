@@ -3,7 +3,9 @@ extends Node
 ## Prints machine-readable NETTEST lines, then the instance quits. Not used otherwise.
 ##
 ## Short mode (net_test.sh): pilots send one autopilot command and check it comes back
-## in their own state; every instance quits a few seconds into the round.
+## in their own state; the lowest-id controller sends the lowest-id pilot a text-radio
+## clearance, everyone reports hearing it, the pilot replies WILCO and the controller
+## reports the readback; every instance quits a few seconds into the round.
 ## Full mode (--full-round, ws_net_test.sh): additionally
 ##   lobby: once everyone is in, every client sends a few voice packets (open mic);
 ##          the leader starts the round (unless the server autostarts, --server-starts);
@@ -18,7 +20,7 @@ const AP_ALT := 12300
 const AP_HDG := 123
 const REPORT_AFTER_SEC := 3.0 ## radar sweeps at t = 0 and 2 s
 const HOST_QUIT_SEC := 10.0
-const CLIENT_QUIT_SEC := 6.0
+const CLIENT_QUIT_SEC := 8.0
 const TIMEOUT_SEC := 60.0
 const FULL_TIMEOUT_SEC := 180.0
 const VOICE_PACKETS := 10
@@ -32,6 +34,7 @@ var _server_starts := false
 var _lobby_voice_sent := false
 var _seen_end := false
 var _round_rx: Dictionary = {} # Voice rx counts at round start
+var _dl_heard := false
 @onready var _s: Node = get_parent()
 
 
@@ -44,6 +47,7 @@ func _ready() -> void:
 	_s.own_updated.connect(_on_own)
 	_s.round_ended.connect(_on_round_ended)
 	_s.lobby_changed.connect(_on_lobby_changed)
+	_s.datalink.connect(_on_datalink)
 	_s.phase_changed.connect(_on_phase_changed)
 	_s.connection_lost.connect(func() -> void: print("NETTEST connection_lost"))
 	_s.error.connect(func(m: String) -> void: print("NETTEST error=%s" % m.replace(" ", "_")))
@@ -114,6 +118,9 @@ func _on_round_began() -> void:
 	if _s.my_role == "pilot":
 		_ap_sent = true
 		_s.send_ap({"alt": AP_ALT, "hdg": AP_HDG})
+	if _s.my_id == _lowest("controller"):
+		_s.send_dl({"kind": "clr", "to": _callsign_of(_lowest("pilot")), "items": [
+			{"t": "hdg", "v": 270, "turn": ""}, {"t": "alt", "v": 6000}]})
 	if _full:
 		await _radio_check()
 		return
@@ -151,6 +158,27 @@ func _radio_check() -> void:
 	var got_unkeyed: int = now.get(unkeyed, 0) - _round_rx.get(unkeyed, 0)
 	print("NETTEST radio id=%d keyer=%s got_keyed=%d got_unkeyed=%d" % [
 		_s.my_id, _s.my_id == keyer, got_keyer, got_unkeyed])
+
+
+func _callsign_of(id: int) -> String:
+	for q: Dictionary in _s.round_players:
+		if int(q["id"]) == id:
+			return String(q["callsign"])
+	return ""
+
+
+## Text radio: every player hears the clearance; its pilot answers; its sender hears that.
+func _on_datalink(m: Dictionary) -> void:
+	if String(m.get("status", "")) != "ok":
+		return
+	if String(m["kind"]) == "clr" and not _dl_heard:
+		_dl_heard = true
+		print("NETTEST dl_heard id=%d" % _s.my_id)
+		if String(m["to"]) == _s.my_callsign:
+			print("NETTEST dl_clr id=%d" % _s.my_id)
+			_s.send_dl({"kind": "reply", "re": int(m["id"]), "items": [{"t": "wilco"}]})
+	elif String(m["kind"]) == "reply" and _s.my_id == _lowest("controller"):
+		print("NETTEST dl_readback id=%d text=%s" % [_s.my_id, String(m["text"]).replace(" ", "_")])
 
 
 func _on_own(ac: Dictionary) -> void:

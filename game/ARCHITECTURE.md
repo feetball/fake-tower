@@ -13,7 +13,8 @@ change names or shapes here without updating this file.
 ```
 game/
   project.godot
-  core/        world.gd, session.gd, sim/ (pure simulation), net glue, shot_helper.gd
+  core/        world.gd, session.gd, sim/ (pure simulation), net glue, shot_helper.gd;
+               net/datalink.gd (text radio), net/ai_pilot.gd, ai_controller.gd, ai_impostor.gd
   voice/       voice.gd (autoload) + codec + radio DSP
   scenes/
     main.tscn            root: swaps screens on Session.phase / role, hosts the HUD
@@ -21,6 +22,7 @@ game/
     pilot/               pilot_view.tscn  — 3D cockpit, outside world, instruments
     controller/          controller_view.tscn — radar room and scope
     hud/                 radio_hud.tscn — PTT, radio state, role banner (shared overlay)
+    pilot/datalink/      the pilot's text-radio panel; controller/panel/clearance_card.gd the controller's
     end/                 end_screen.tscn
   assets/      CC0 textures/HDRIs/models/sounds + LICENSES.md + CATALOG.md
   tests/       headless tests (run_tests.gd, voice_test.gd, net_test.sh, ws_net_test.sh, smoke_test.sh),
@@ -85,6 +87,26 @@ After a crash the last state is frozen.
 
 `ap` command — any subset of `{hdg, alt, spd, app:bool, gear:bool, flaps:int, alt_setting}`.
 
+`dl` (text radio, `core/net/datalink.gd`; not in the TS version) — what a client sends:
+```
+clearance (controller)  {kind:"clr", to:<callsign>, items:[item...]}
+  items: {t:"hdg", v:1..360, turn:"L"|"R"|""}, {t:"alt", v:1000..20000 (×100)}, {t:"spd", v:140..250},
+         {t:"qnh", v:950..1050}, {t:"orbit", turn:"L"|"R"}, and {t:<name>} for contact, cancel, app,
+         expect, land, ga, roger, disregard, traffic, low_alt (read in Datalink.CLR_ORDER)
+call (controller)       {kind:"call", items:[{t:"atis"}]} or [{t:"accuse", who:<controller id>}]
+call (pilot)            {kind:"call", items:[{t:"checkin"|"req_vectors"|"established"|"min_fuel"|
+                         "mayday_fuel"|"going_around"}]} or [{t:"accuse", who:<controller id>}]
+reply (pilot)           {kind:"reply", re:<message id>, items:[{t:"wilco"|"standby"|"say_again"}]}
+                         or [{t:"unable", why:""|"msa"|"qnh"|"terrain"|"fuel"}]
+```
+What every player receives (`dl`, reliable) is that plus `id`, `time`, `from` (player id), `role`,
+`from_cs` (the sender's callsign, "" for controllers), `text` (rendered by the host when it airs)
+and `status`: `"queued"` (sender only), `"ok"`, `"blocked"` (text "" except for the sender),
+`"expired"` (sender only: the frequency never cleared in 30 s) or `"cut"` (the sender's radio died).
+A message waits for a clear frequency (nobody in `tx`, no other text airing), airs for about its
+speaking time, and is blocked if anyone keys up meanwhile. The airer is in `radio.dl`, never in
+`radio.tx`: text never opens a microphone.
+
 ## Autoload `Session` (core/session.gd)
 
 The only thing views talk to. Host-authoritative: the host's instance runs the
@@ -107,7 +129,9 @@ world: Dictionary
 atis: Dictionary
 own: Dictionary          latest own-aircraft state ({} if not a pilot)
 radar: Array[Dictionary] latest sweep ([] if not a controller)
-radio_tx: Array[int]     ids keying the frequency; size >= 2 means blocked
+radio_tx: Array[int]     ids keyed by voice (push-to-talk)
+dl_tx: Array[int]        ids with a text message on the air; radio_tx + dl_tx >= 2 means blocked
+dl_log: Array[Dictionary] this round's text messages, arrival order, one entry per id (status updates replace it)
 events: Array[Dictionary]
 result: Dictionary
 round_time: float
@@ -123,6 +147,7 @@ listen_port: int         host: ENet UDP port (0 = off)
 listen_ws_port: int      host: WebSocket TCP port (0 = off)
 autostart_at: int        dedicated: start when this many players are in (0 = leader starts)
 lobby_after: float       dedicated + autostart_at: seconds from round end back to lobby
+fast_forward: bool       offline round running ×8: our own aircraft has crashed, or landed and stopped
 ```
 Signals:
 ```
@@ -136,6 +161,7 @@ round_ended(result: Dictionary)
 phase_changed(phase: String)
 error(msg: String)
 connection_lost()
+datalink(msg: Dictionary)   a text message arrived or changed status
 ```
 Methods:
 ```
@@ -159,11 +185,18 @@ start_round() -> void                leader only (a dedicated server's leader as
 return_to_lobby() -> void            leader only
 send_ap(changes: Dictionary) -> void pilot only
 set_ptt(on: bool) -> void
-start_demo(role: String) -> void     offline round for development and screenshots:
+send_dl(msg: Dictionary) -> void     a text-radio message (shape above); errors come back via `error`
+on_air() -> Array[int]               radio_tx and dl_tx together
+start_demo(role: String) -> void     offline round for development, screenshots and solo play:
                                      "pilot" = you fly one aircraft, starting established
                                      on a 12 nm final at the platform altitude, plus AI traffic;
                                      "controller" = scope with 4 scripted AI aircraft.
                                      "pilot_far" = pilot spawned normally at an arrival gate.
+                                     Text-radio AI players (core/net/demo.gd):
+                                     "solo" = you fly, an AI controller works you and 2 AI pilots;
+                                     "solo_impostor" = you + 1 AI pilot, a real AI controller and an
+                                     AI impostor after you; "solo_controller" = you are the tower,
+                                     4 AI pilots fly by your clearances.
 player_name(id: int) -> String
 callsign_of(id: int) -> String
 ```
@@ -226,14 +259,25 @@ browser asks by itself on the first capture (getUserMedia, https or localhost
 only). All Voice players use stream playback (web exports default to sample
 playback, which bypasses bus effects). On a dedicated server Voice only relays.
 Lobby/ended = open mic, clean. Playing = one VHF frequency, PTT, radio DSP,
-squelch, heterodyne squeal when blocked (`Session.radio_tx.size() >= 2`).
+squelch, heterodyne squeal when blocked (two or more on the air: `Session.radio_tx` plus
+`Session.dl_tx`). Our microphone opens only for `radio_tx` (push-to-talk); a text airer
+counts for squelch, squeal and the host's relay rule.
+
+## AI players (core/net/ai_*.gd)
+
+All of them talk only through the text radio (`Room.handle_dl`) and hear it through
+`Room.dl_hook`; none touches the simulation except an AI pilot flying its own aircraft through
+`SimAircraft.apply`, like a human's autopilot. `ai_controller.gd` sees only what a scope shows
+(`SimRound.radar()`). `ai_impostor.gd` extends it. `demo.gd` builds the solo rounds and wires them.
 
 ## Input actions (registered in code by Session at startup)
 
 `ptt` (Space) and, for the pilot: `hdg_left/right` (Left/Right, Shift = ×10),
 `alt_up/down` (Up/Down, Shift = ×1000), `spd_up/down` (PageUp/PageDown),
 `baro_down/up` ([ / ]), `baro_std` (B), `toggle_app` (A), `toggle_gear` (G),
-`flaps_down` (F), `flaps_up` (Shift+F), `show_atis` (I), `show_plate` (P).
+`flaps_down` (F), `flaps_up` (Shift+F), `show_atis` (I), `show_plate` (P);
+text radio: `dl_wilco` (W), `dl_unable` (U), `dl_standby` (S), `dl_say_again` (R),
+`dl_calls` (C), `dl_more` (T). The controller's Enter (focus the shorthand line) is a plain key.
 
 ## Screenshots without a GPU
 

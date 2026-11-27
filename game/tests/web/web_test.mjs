@@ -7,7 +7,8 @@
 // game/tools/export_build.sh web). Screenshots and logs go to --out (default
 // build/web-test). Tests (all by default):
 //   load        index.html loads, the menu renders, no console errors
-//   demo        ?demo=controller and ?demo=pilot start an offline round and render
+//   demo        ?demo=controller, ?demo=pilot and ?demo=solo (AI tower on the text radio)
+//               start an offline round and render
 //   touch       phone emulation (landscape, touch): the touch UI is up; a finger holds
 //               PTT while another taps the autopilot strip (HDG tab, +)
 //   multiplayer a headless dedicated server (needs Godot: env GODOT, else `godot` on
@@ -225,17 +226,24 @@ async function testLoad(browser, base) {
 }
 
 async function testDemo(browser, base) {
-  for (const role of ['controller', 'pilot']) {
+  // [demo, role]: "solo" is a pilot round worked by the AI controller over the text radio.
+  for (const [demo, role] of [
+    ['controller', 'controller'],
+    ['pilot', 'pilot'],
+    ['solo', 'pilot'],
+  ]) {
     const ctx = await browser.newContext({ viewport: { width: 1280, height: 720 } });
     try {
-      const g = await openGame(ctx, base, `demo=${role}&debug-state=1`, `demo_${role}`);
+      const g = await openGame(ctx, base, `demo=${demo}&debug-state=1`, `demo_${demo}`);
       await waitState(
         g.page,
         (x) => x.phase === 'playing' && x.role === role,
-        `a ${role} demo round`,
+        `a ${demo} demo round`,
       );
+      if (demo === 'solo')
+        await waitState(g.page, (x) => x.dl > 0, 'a text-radio message from the AI tower', 90000);
       await sleep(role === 'pilot' ? 8000 : 5000);
-      await shot(g.page, `web_demo_${role}`);
+      await shot(g.page, `web_demo_${demo}`);
       noErrors(g);
     } finally {
       await ctx.close();
