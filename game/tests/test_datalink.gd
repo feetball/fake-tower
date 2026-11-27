@@ -192,6 +192,8 @@ func test_room_blocking_waiting_and_limits(t: T) -> void:
 	steps(room, 60)
 	t.eq(rec.dl(pilot, "blocked").size(), 1, "blocked")
 	t.eq(String(rec.dl(pilot, "blocked")[0]["text"]), "", "others get no text")
+	t.eq(rec.dl(pilot, "blocked")[0]["items"], [], "nor its items")
+	t.eq(String(rec.dl(pilot, "blocked")[0]["to"]), "", "nor who it was for")
 	t.check(String(rec.dl(ctl, "blocked")[0]["text"]) != "", "the sender sees what was lost")
 	# A voice on the frequency: text waits, then goes once it is clear.
 	room.set_ptt(other, true)

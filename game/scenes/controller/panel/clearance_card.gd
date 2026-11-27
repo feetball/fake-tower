@@ -121,6 +121,8 @@ func _value_box(k: String) -> Control:
 	val.tooltip_text = "Click to include or leave out; wheel or −/+ to change (Shift: big steps)"
 	val.toggled.connect(func(on: bool) -> void:
 		_on[k] = on
+		if on:
+			_untoggle_exclusive(k)
 		_update_preview())
 	val.gui_input.connect(func(e: InputEvent) -> void:
 		if e is InputEventMouseButton and (e as InputEventMouseButton).pressed:
@@ -188,6 +190,7 @@ func nudge(k: String, dir: int, big: bool) -> void:
 	_vals[k] = v
 	_on[k] = true
 	(_val_labels[k] as Button).set_pressed_no_signal(true)
+	_untoggle_exclusive(k)
 	_update_preview()
 
 
@@ -224,8 +227,32 @@ func _untoggle_exclusive(key: String) -> void:
 			(_flag_btns[other] as Button).set_pressed_no_signal(false)
 
 
-## The items to send: the typed shorthand if there is any, else the toggles.
+## The items to send: the typed shorthand if there is any, else the toggles; checked
+## with the host's own rules (Datalink.parse), so SEND never offers what it would refuse.
 func items() -> Dictionary:
+	var r := _raw_items()
+	if String(r["error"]) == "" and _target != "":
+		var out := {}
+		var err := Datalink.parse(Datalink.clr(_target, r["items"]), "controller", out)
+		if err != "":
+			return {"items": [], "error": _readable(err.trim_prefix("Bad message: "))}
+	return r
+
+
+## "hdg with orbit" -> "A heading and a 360 cannot go in one message."
+static func _readable(err: String) -> String:
+	const NAMES := {"hdg": "a heading", "orbit": "a 360", "app": "CLEARED ILS", "cancel": "CANCEL APP",
+		"ga": "GO AROUND", "land": "CLEARED LAND"}
+	var pair := err.split(" with ")
+	if pair.size() == 2 and NAMES.has(pair[0]) and NAMES.has(pair[1]):
+		var msg := "%s and %s cannot go in one message." % [NAMES[pair[0]], NAMES[pair[1]]]
+		return msg.left(1).to_upper() + msg.substr(1)
+	if err == "items":
+		return "Too many items for one message (at most %d)." % Datalink.MAX_ITEMS
+	return err
+
+
+func _raw_items() -> Dictionary:
 	if _cmd.text.strip_edges() != "":
 		return Datalink.parse_command(_cmd.text, int(Session.atis.get("qnh", 0)))
 	var out: Array = []
@@ -260,7 +287,8 @@ func _update_preview() -> void:
 		_preview.text = ""
 		return
 	if String(r["error"]) != "":
-		_preview.text = String(r["error"]) if _cmd.text.strip_edges() != "" else ""
+		var nothing := String(r["error"]) == "Nothing to send" and _cmd.text.strip_edges() == ""
+		_preview.text = "" if nothing else String(r["error"])
 		_preview.add_theme_color_override(&"font_color", Look.FDD_AMBER)
 		return
 	var t: Dictionary = model.targets.get(_target, {})
@@ -280,6 +308,12 @@ func send() -> void:
 	var r := items()
 	if String(r["error"]) != "":
 		_update_preview()
+		return
+	var why := Session.dl_refusal()
+	if why != "":
+		# Keep what was composed: it can go once the frequency has room.
+		_preview.text = why
+		_preview.add_theme_color_override(&"font_color", Look.FDD_AMBER)
 		return
 	Session.send_dl(Datalink.clr(_target, r["items"]))
 	_clear_toggles()

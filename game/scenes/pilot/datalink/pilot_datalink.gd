@@ -16,6 +16,7 @@ const MARGIN := 22.0
 const ROWS_SHORT := 3
 const ROWS_LONG := 8
 const ROWS_TOUCH_MAX := 5
+const NOTICE_MS := 3000
 ## Each controller keeps one colour, so the two "Fallow Approach" voices stay apart.
 const CTL_COLORS: Array[Color] = [Color(0.56, 0.93, 0.76), Color(0.8, 0.66, 1.0), Color(1.0, 0.82, 0.5)]
 const PILOT_COLOR := Color(0.55, 0.78, 1.0)
@@ -32,7 +33,7 @@ var top_reserved := 70.0:
 		top_reserved = v
 		if is_node_ready():
 			_layout()
-## Hidden for good (the aircraft crashed: its radio is dead).
+## Hidden for good (not used by the pilot view: a crashed pilot still listens).
 var suppressed := false:
 	set(v):
 		suppressed = v
@@ -57,6 +58,7 @@ var _calls_bar: HFlowContainer
 var _calls_btn: Button
 var _more_btn: Button
 var _reply_to: Dictionary = {}
+var _notice: Array = [] ## [text, until ticks msec]: a refused send, shown in the header
 var _answered: Dictionary = {} ## message id -> true once we replied
 var _touch := false
 
@@ -231,8 +233,14 @@ func _refresh_status() -> void:
 	var air: Array = Sess.val(&"dl_tx", [])
 	var voice: Array = Sess.radio_tx()
 	var me := Sess.my_id()
+	var on_air := voice.duplicate()
+	for id: Variant in air:
+		if not on_air.has(id):
+			on_air.append(id)
 	var txt := ""
-	if air.size() + voice.size() >= 2:
+	if not _notice.is_empty() and Time.get_ticks_msec() < int(_notice[1]):
+		txt = String(_notice[0])
+	elif on_air.size() >= 2:
 		txt = "BLOCKED"
 	elif air.has(me):
 		txt = "sending…"
@@ -274,9 +282,9 @@ func _row(m: Dictionary, newest: bool) -> Control:
 		col = UiTheme.RED
 	text.add_theme_color_override(&"font_color", col)
 	h.add_child(text)
-	if mine and status in ["blocked", "expired", "cut"]:
-		var again := m.duplicate(true)
-		h.add_child(_small("RESEND", func() -> void: _send(_strip(again))))
+	if mine and status in ["blocked", "expired", "cut"] and not _dead():
+		var again := Datalink.resend_copy(m)
+		h.add_child(_small("RESEND", func() -> void: _send(again)))
 	if not (to_me and status == "ok"):
 		return h
 	var mark := PanelContainer.new()
@@ -347,7 +355,7 @@ func _awaiting_reply() -> Dictionary:
 func _rebuild_calls() -> void:
 	for c in _calls_bar.get_children():
 		c.queue_free()
-	if Sess.my_role() != "pilot":
+	if Sess.my_role() != "pilot" or _dead():
 		_calls_btn.visible = false
 		_calls_bar.visible = false
 		return
@@ -355,14 +363,14 @@ func _rebuild_calls() -> void:
 	for c: Array in CALLS:
 		var t := String(c[0])
 		_calls_bar.add_child(_small(String(c[1]), func() -> void:
-			_send(Datalink.radio_call(t))
-			_calls_bar.visible = false))
+			if _send(Datalink.radio_call(t)):
+				_calls_bar.visible = false))
 	for p: Variant in Sess.round_players():
 		if p is Dictionary and String((p as Dictionary).get("role", "")) == "controller" and UiText.controller_names().size() >= 2:
 			var who := int((p as Dictionary)["id"])
 			var b := _small("CALL OUT %s" % String((p as Dictionary).get("name", "?")).to_upper(), func() -> void:
-				_send(Datalink.radio_call("accuse", who))
-				_calls_bar.visible = false)
+				if _send(Datalink.radio_call("accuse", who)):
+					_calls_bar.visible = false)
 			b.add_theme_color_override(&"font_color", UiTheme.RED)
 			_calls_bar.add_child(b)
 	if _touch:
@@ -402,28 +410,32 @@ func _sender_color(m: Dictionary) -> Color:
 
 # ---------------------------------------------------------------- actions
 
+## Answered only once it really went to the host (a full queue keeps the reply bar up).
 func _reply(t: String, why: String) -> void:
 	if _reply_to.is_empty():
 		return
 	var mid := int(_reply_to.get("id", 0))
-	_answered[mid] = true
-	_unable_bar.visible = false
-	_send(Datalink.reply(mid, t, why))
+	if _send(Datalink.reply(mid, t, why)):
+		_answered[mid] = true
+		_unable_bar.visible = false
+		refresh()
 
 
-func _send(msg: Dictionary) -> void:
+## Hand a message to Session; false (and a note in the header) when it would be refused.
+func _send(msg: Dictionary) -> bool:
+	var why: Variant = Sess.invoke(&"dl_refusal")
+	if why is String and String(why) != "":
+		_notice = [String(why), Time.get_ticks_msec() + NOTICE_MS]
+		_refresh_status()
+		return false
 	Sess.invoke(&"send_dl", [msg])
 	refresh()
+	return true
 
 
-## A message as the client sends it (the host's fields dropped).
-static func _strip(m: Dictionary) -> Dictionary:
-	var out := {"kind": m.get("kind", ""), "items": m.get("items", [])}
-	if String(m.get("kind", "")) == Datalink.KIND_CLR:
-		out["to"] = m.get("to", "")
-	if String(m.get("kind", "")) == Datalink.KIND_REPLY:
-		out["re"] = m.get("re", 0)
-	return out
+func _dead() -> bool:
+	var own: Dictionary = Sess.val(&"own", {})
+	return String(own.get("status", "flying")) == "crashed"
 
 
 func _toggle_calls() -> void:

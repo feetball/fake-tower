@@ -501,6 +501,9 @@ func debug_send_tone(n: int) -> void:
 ## Host only: apply the relay rule, forward to everyone but the sender, play locally.
 func _relay(sender: int, packet: PackedByteArray) -> void:
 	_read_session()
+	# Only push-to-talk opens a transmitter; a text airer counts for blocking, not as a mic.
+	if _phase == "playing" and not _tx.has(sender):
+		return
 	if not Logic.should_forward(_phase, _air, sender):
 		return
 	for peer in multiplayer.get_peers():

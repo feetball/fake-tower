@@ -480,6 +480,16 @@ func _dl_drop_sender(id: int) -> void:
 
 
 func _dl_step(dt: float) -> void:
+	var keep: Array[Dictionary] = []
+	for q in _dl_queue:
+		q["waited"] = float(q["waited"]) + dt
+		if float(q["waited"]) >= DL_WAIT_MAX_SEC:
+			var gone: Dictionary = q["msg"]
+			gone["status"] = "expired"
+			_dl_notify_sender(gone)
+		else:
+			keep.append(q)
+	_dl_queue = keep
 	if not _dl_air.is_empty():
 		if not tx.is_empty():
 			_dl_air["blocked"] = true
@@ -495,16 +505,6 @@ func _dl_step(dt: float) -> void:
 		_broadcast_radio()
 		_dl_deliver(m)
 		return
-	var keep: Array[Dictionary] = []
-	for q in _dl_queue:
-		q["waited"] = float(q["waited"]) + dt
-		if float(q["waited"]) >= DL_WAIT_MAX_SEC:
-			var m: Dictionary = q["msg"]
-			m["status"] = "expired"
-			_dl_notify_sender(m)
-		else:
-			keep.append(q)
-	_dl_queue = keep
 	_dl_gap -= dt
 	if _dl_gap > 0.0 or not tx.is_empty() or _dl_queue.is_empty():
 		return
@@ -541,7 +541,8 @@ func dl_context(m: Dictionary) -> Dictionary:
 	return ctx
 
 
-## Everyone hears an aired message; a blocked one carries its text to the sender only.
+## Everyone hears an aired message. A blocked one reaches its sender in full and
+## everyone else as just that (who keyed up, no content), like a squeal on the radio.
 func _dl_deliver(m: Dictionary) -> void:
 	var blocked := String(m["status"]) == "blocked"
 	for p in players:
@@ -549,7 +550,8 @@ func _dl_deliver(m: Dictionary) -> void:
 			continue
 		var out := m.duplicate(true)
 		if blocked and int(p["id"]) != int(m["from"]):
-			out["text"] = ""
+			out = {"id": m["id"], "time": m["time"], "from": m["from"], "role": m["role"],
+				"from_cs": m["from_cs"], "kind": "", "to": "", "re": 0, "items": [], "text": "", "status": "blocked"}
 		send_to(int(p["id"]), "dl", {"msg": out})
 	if dl_hook.is_valid():
 		dl_hook.call(m.duplicate(true))

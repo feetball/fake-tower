@@ -139,16 +139,29 @@ func _build(demo_role: String, me: int, rng: SimRng) -> void:
 			var ids: Array[int] = [me, ai_id(0)]
 			sim = SimRound.new(rng, ids)
 			roles.pilots.append_array(ids)
-			roles.real_controller_id = ai_id(1)
-			roles.impostor_id = ai_id(2)
-			var real_first := rng.rand_int(0, 1) == 0
+			# Which id is real, which name it gets and who speaks first are all random, so
+			# neither the roster order (colours, call-out buttons) nor the order of the
+			# read-aloud voices gives the impostor away.
+			var real_id := ai_id(1) if rng.rand_int(0, 1) == 0 else ai_id(2)
+			var imp_id := ai_id(1) + ai_id(2) - real_id
+			var real_name := rng.rand_int(0, 1)
+			roles.real_controller_id = real_id
+			roles.impostor_id = imp_id
 			var mine := sim.by_player(me).callsign
-			var obey: Array[int] = [ai_id(1)]
-			_add_pilot(ai_id(0), obey, 3.0)
-			_add_controller(ai_id(1), DUEL_NAMES[0 if real_first else 1], mine)
-			impostor = AiImpostor.new(ai_id(2), sim, _forward, mine, rng)
-			controllers.append(impostor)
-			ai_names[ai_id(2)] = DUEL_NAMES[1 if real_first else 0]
+			var obey: Array[int] = [real_id]
+			var traffic := _add_pilot(ai_id(0), obey, 3.0)
+			# It reads back both controllers (as a pilot who cannot tell either would) but
+			# flies only the real one's instructions: the impostor talks to it too.
+			traffic.ack_others = true
+			var real := AiController.new(real_id, sim, _forward)
+			real.priority_cs = mine
+			impostor = AiImpostor.new(imp_id, sim, _forward, mine, rng)
+			for id in [ai_id(1), ai_id(2)]:
+				ai_names[id] = DUEL_NAMES[real_name if id == real_id else 1 - real_name]
+			if rng.rand_int(0, 1) == 0:
+				controllers.append_array([real, impostor])
+			else:
+				controllers.append_array([impostor, real])
 		"solo_controller":
 			var ids: Array[int] = []
 			for i in 4:

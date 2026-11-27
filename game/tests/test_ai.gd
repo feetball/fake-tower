@@ -140,8 +140,21 @@ func test_ai_pilot_refuses_the_tells(t: T) -> void:
 	t.eq(g.ac.sel_alt, 3000, "a gullible pilot does as told")
 	var o := _lone_pilot(25.0, 10.0, 8000.0, 250.0)
 	o.obey = [4] as Array[int]
+	o.checkin_at = -1.0
 	o.hear(_aired(1, "TST1", [Datalink.hdg(90)]))
 	t.check(o.ac.sel_hdg != 90, "only listens to the controllers it trusts")
+	var acks: Array[Dictionary] = []
+	o.tick(2.0, func(_f: int, msg: Dictionary) -> String:
+		acks.append(msg)
+		return "")
+	t.eq(acks.size(), 0, "and does not answer the others")
+	o.ack_others = true
+	o.hear(_aired(2, "TST1", [Datalink.hdg(100)]))
+	o.tick(2.0, func(_f: int, msg: Dictionary) -> String:
+		acks.append(msg)
+		return "")
+	t.check(o.ac.sel_hdg != 100 and acks.size() == 1 and int(acks[0]["re"]) == 2,
+		"ack_others: reads it back, still does not fly it")
 	t.done()
 
 
@@ -186,6 +199,15 @@ func test_demo_solo_modes_shapes(t: T) -> void:
 	var names := [duel.ai_names[duel.roles.real_controller_id], duel.ai_names[duel.roles.impostor_id]]
 	names.sort()
 	t.eq(names, Demo.DUEL_NAMES, "neutral names")
+	# Nothing about the order gives the impostor away: roster (= id) order, name and
+	# who speaks first all vary between rounds.
+	var seen := {}
+	for seed_v in range(1, 13):
+		var dd := Demo.build("solo_impostor", ME, SimRng.new(seed_v))
+		seen["real_first_in_roster:%s" % (dd.ai_names.keys().find(dd.roles.real_controller_id) < dd.ai_names.keys().find(dd.roles.impostor_id))] = true
+		seen["real_is_A:%s" % (dd.ai_names[dd.roles.real_controller_id] == Demo.DUEL_NAMES[0])] = true
+		seen["real_ticks_first:%s" % (dd.controllers[0] != dd.impostor)] = true
+	t.eq(seen.size(), 6, "roster order, names and speaking order vary (%s)" % [seen.keys()])
 	var ctl := Demo.build("solo_controller", ME, SimRng.new(1))
 	t.eq(ctl.roles.real_controller_id, ME, "you are the tower")
 	t.eq(ctl.pilots.size(), 4, "4 AI pilots")

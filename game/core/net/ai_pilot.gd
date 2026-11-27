@@ -30,6 +30,8 @@ var world: SimWorld
 var atis_qnh := 1013
 ## Controllers whose clearances this pilot follows; empty = any controller.
 var obey: Array[int] = []
+## Read back (WILCO) clearances from controllers not in `obey` too, without flying them.
+var ack_others := false
 ## Refuse unsafe instructions (MSA, QNH, terrain). A gullible pilot does as told.
 var careful := true
 ## Replies, check-in and calls on the frequency (false: a silent test pilot).
@@ -92,6 +94,8 @@ func hear(m: Dictionary) -> void:
 	if String(m.get("role", "")) != "controller":
 		return
 	if not obey.is_empty() and not obey.has(int(m.get("from", 0))):
+		if ack_others and talk and _wants_reply(m):
+			_say(Datalink.reply(int(m["id"]), "wilco"), REPLY_DELAY_S)
 		return
 	_heard_t = _t
 	var why := check(m) if careful else ""

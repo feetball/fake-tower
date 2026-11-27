@@ -268,6 +268,26 @@ func send_dl(msg: Dictionary) -> void:
 		_s_dl.rpc_id(1, msg)
 
 
+## Our text messages the host has queued and not yet aired.
+func dl_waiting() -> int:
+	var n := 0
+	for m in dl_log:
+		if int(m.get("from", 0)) == my_id and String(m.get("status", "")) == "queued":
+			n += 1
+	return n
+
+
+## "" when a text message of ours would be accepted now, else why not (checked again by the host).
+func dl_refusal() -> String:
+	if phase != "playing" or my_role == "":
+		return "No round in progress"
+	if dl_waiting() >= Room.DL_QUEUE_MAX:
+		return "Frequency busy: wait for your messages to go out"
+	if my_role == "pilot" and String(own.get("status", "flying")) == "crashed":
+		return "Your radio is dead"
+	return ""
+
+
 ## Everyone on the frequency, voice and text: the ids keyed right now.
 func on_air() -> Array[int]:
 	var out: Array[int] = []

@@ -126,6 +126,16 @@ static func has_item(m: Dictionary, t: String) -> bool:
 	return not find_item(m, t).is_empty()
 
 
+## A received message of ours as the client sends it again (the host's fields dropped).
+static func resend_copy(m: Dictionary) -> Dictionary:
+	var out := {"kind": m.get("kind", ""), "items": (m.get("items", []) as Array).duplicate(true)}
+	if String(m.get("kind", "")) == KIND_CLR:
+		out["to"] = m.get("to", "")
+	if String(m.get("kind", "")) == KIND_REPLY:
+		out["re"] = m.get("re", 0)
+	return out
+
+
 # ---------------------------------------------------------------- validation (untrusted)
 
 ## Parse a client message for a player of `role` ("controller" | "pilot"). Fills `out`

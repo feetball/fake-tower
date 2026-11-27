@@ -1,8 +1,8 @@
 extends "res://core/net/ai_controller.gd"
 ## The AI impostor for solo "spot the impostor": a second voice claiming to be
-## Fallow Approach, working only the human's aircraft. It vectors plausibly (its
-## own plan, a little different from the real controller's, so the pilot hears two
-## sets of instructions) and then, from `lie_after` on, slips in the tells the
+## Fallow Approach. It works every aircraft like a controller would (its own plan, a
+## little different from the real controller's, so pilots hear two sets of
+## instructions), and lies only to the human's: from `lie_after` on it slips in the tells the
 ## design names: a wrong QNH, a descent below the MSA, a vector into terrain, a
 ## pointless 360 and vectors away to burn fuel. When the real controller calls it
 ## out it calls the real one out in turn, and says its lie again once.
@@ -43,10 +43,6 @@ func _init(controller_id: int, round_sim: SimRound, send_fn: Callable, target: S
 	_gate_leg = GATE_LEG_NM + 2.0
 
 
-func _works(cs: String) -> bool:
-	return cs == target_cs
-
-
 func tick(dt: float) -> void:
 	if _counter_at > 0.0 and _t >= _counter_at:
 		_counter_at = -1.0
@@ -76,10 +72,11 @@ func _contact_items(p: Plan, tg: Dictionary, h: int, a: int) -> Array:
 	return items
 
 
-## Plausible vectors until `lie_after`; from then on only the lies (said again while
-## they are ignored), never a correction of its own lie.
+## Plausible vectors until `lie_after` (and always for the other aircraft); for the
+## target from then on only the lies (said again while ignored), never a correction of
+## its own lie.
 func _work(p: Plan, tg: Dictionary, all: Array) -> void:
-	if p.stage == "new" or _t < lie_after:
+	if p.cs != target_cs or p.stage == "new" or _t < lie_after:
 		super(p, tg, all)
 	elif _t - _lie_t >= LIE_REPEAT_S:
 		_lie(p, tg)

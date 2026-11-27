@@ -362,8 +362,11 @@ func _unhandled_input(e: InputEvent) -> void:
 		return
 	var k := e as InputEventKey
 	if k.pressed and not k.echo and (k.keycode == KEY_ENTER or k.keycode == KEY_KP_ENTER):
-		_panel.focus_command() # the text-radio shorthand for the selected target
-		get_viewport().set_input_as_handled()
+		# The text-radio shorthand for the selected target; the panel takes input only
+		# as the overlay at the scope (in the room view it is a texture on the 3D display).
+		if _camera.at_scope() and _panel.get_parent() == _panel_host:
+			_panel.focus_command()
+			get_viewport().set_input_as_handled()
 		return
 	if _scope.input.key(k):
 		get_viewport().set_input_as_handled()

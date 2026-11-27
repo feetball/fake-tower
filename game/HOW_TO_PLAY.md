@@ -136,7 +136,7 @@ Text obeys the frequency too:
 | **C** | CALLS: check in, request vectors, established, minimum fuel, mayday fuel (with your real fuel), going around, and **CALL OUT** a controller as the impostor |
 | **T** | More or fewer lines |
 
-The reply buttons only show while an instruction for you is waiting for an answer. That instruction stays pinned in the panel until you answer it. Replying does not fly the aircraft: you still set the autopilot yourself.
+The reply buttons only show while an instruction for you is waiting for an answer. That instruction stays pinned in the panel until you answer it. Replying does not fly the aircraft: you still set the autopilot yourself. After a crash you can no longer send, but the panel keeps showing the frequency.
 
 **Controllers** (flight data panel, under the flight strip): select a target, then either
 
@@ -153,7 +153,7 @@ The reply buttons only show while an instruction for you is waiting for an answe
 | `rc` · `exp` | radar contact, information … is current · expect ILS approach |
 | `la` · `ta` · `ol` / `or` · `dis` · `rog` | low altitude alert · traffic alert · left / right 360 for spacing · disregard · roger |
 
-The line under it shows exactly what will go out; a QNH that is not the ATIS one shows in amber. **SEND** sends it. Below, **ALL STATIONS**: broadcast the ATIS letter and QNH, or **CALL OUT** the other controller. With `ALT` and `CLEARED ILS` together the message reads "maintain 5500 until established on the localizer, cleared ILS approach".
+The line under it shows exactly what will go out; a QNH that is not the ATIS one shows in amber. Items that cannot go together (a heading with a 360, CLEARED ILS with GO AROUND…) grey out SEND and say why. **SEND** sends it; while three of your messages are still waiting it keeps what you composed and says the frequency is busy. A blocked or unsent message of yours gets **RESEND** in the FREQUENCY tab. Below, **ALL STATIONS**: broadcast the ATIS letter and QNH, or **CALL OUT** the other controller. With `ALT` and `CLEARED ILS` together the message reads "maintain 5500 until established on the localizer, cleared ILS approach".
 
 **Read aloud.** With **Read text-radio messages aloud** on in Settings (on by default where the system has text-to-speech), every message from someone else is spoken by the system's voices, one voice per person, so the two controllers sound different. Your own messages are not read back. These voices do not go through the radio filter.
 

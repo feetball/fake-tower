@@ -473,6 +473,14 @@ func _refresh_freq() -> void:
 		l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		l.custom_minimum_size = Vector2(80, 0)
 		h.add_child(l)
+		if mine and status in ["blocked", "expired", "cut"]:
+			var again := Datalink.resend_copy(m)
+			var b := S.flat_button("RESEND", 12, Look.FDD_ACCENT)
+			b.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+			b.pressed.connect(func() -> void:
+				if Session.dl_refusal() == "":
+					Session.send_dl(again))
+			h.add_child(b)
 		_freq.add_child(h)
 
 
