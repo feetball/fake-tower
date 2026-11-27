@@ -28,6 +28,8 @@ signal round_ended(result: Dictionary)
 signal phase_changed(phase: String)
 signal error(msg: String)
 signal connection_lost()
+## A text-radio message arrived or changed status (core/net/datalink.gd for the shape).
+signal datalink(msg: Dictionary)
 
 const DEFAULT_PORT := 27270 ## ENet, UDP
 const DEFAULT_WS_PORT := 27271 ## WebSocket, TCP
@@ -48,6 +50,9 @@ const RAW_NAME_MAX := 200
 const REFUSE_KICK_SEC := 0.5
 const SERVER_SCENE := "res://core/net/server.tscn"
 const SERVER_MAX_FPS := 30 ## dedicated server frame cap (the sim runs at 10 Hz)
+const DL_LOG_MAX := 200
+## Solo rounds: once the human's own flight is over, the rest plays out this much faster.
+const FAST_FORWARD := 8.0
 
 var phase := "menu"
 var my_id := 0
@@ -63,6 +68,11 @@ var atis: Dictionary = {}
 var own: Dictionary = {}
 var radar: Array[Dictionary] = []
 var radio_tx: Array[int] = []
+## Ids with a text message on the air (not keyed by voice: their microphone stays shut).
+## The frequency is busy when radio_tx and dl_tx hold anyone, blocked with two or more.
+var dl_tx: Array[int] = []
+## This round's text messages in arrival order; a status change replaces the entry.
+var dl_log: Array[Dictionary] = []
 var events: Array[Dictionary] = []
 var result: Dictionary = {}
 var round_time := 0.0
@@ -86,6 +96,8 @@ var listen_ws_port := 0
 var autostart_at := 0
 ## Dedicated server with autostart_at: seconds from round end back to the lobby.
 var lobby_after := 15.0
+## Offline round running FAST_FORWARD times faster (our own aircraft is done).
+var fast_forward := false
 
 var _room: Room = null
 var _demo: Demo = null
@@ -112,9 +124,11 @@ func _ready() -> void:
 
 func _process(delta: float) -> void:
 	if phase == "playing":
-		round_time += delta
+		fast_forward = _demo_flight_over()
+		var k := FAST_FORWARD if fast_forward else 1.0
+		round_time += delta * k
 		if _room != null:
-			_room.advance(delta)
+			_room.advance(delta * k)
 	if is_dedicated:
 		_server_tick(delta)
 	_flush_local()
@@ -241,6 +255,29 @@ func send_ap(changes: Dictionary) -> void:
 		_s_ap.rpc_id(1, changes)
 
 
+## Text radio: a clearance, call or reply (core/net/datalink.gd). The host queues it
+## until the frequency is clear; the result comes back through `datalink`.
+func send_dl(msg: Dictionary) -> void:
+	if phase != "playing" or my_role == "":
+		return
+	if is_host:
+		if _room != null:
+			_report(_room.handle_dl(my_id, msg))
+			_flush_local()
+	elif _peer != null and my_id != 0:
+		_s_dl.rpc_id(1, msg)
+
+
+## Everyone on the frequency, voice and text: the ids keyed right now.
+func on_air() -> Array[int]:
+	var out: Array[int] = []
+	out.append_array(radio_tx)
+	for id in dl_tx:
+		if not out.has(id):
+			out.append(id)
+	return out
+
+
 func set_ptt(on: bool) -> void:
 	if on == _ptt_on:
 		return
@@ -270,8 +307,18 @@ func start_demo(role: String) -> void:
 	for id: int in demo.ai_names:
 		_room.add(id, demo.ai_names[id])
 	_room.ai_hook = demo.tick
+	_room.dl_hook = demo.hear
+	demo.attach(_room.handle_dl)
 	_room.begin_round(demo.roles, demo.sim)
 	_flush_local()
+
+
+## Offline, flying: our aircraft has crashed, or landed and stopped, while others still fly.
+func _demo_flight_over() -> bool:
+	if not is_demo or my_role != "pilot" or own.is_empty():
+		return false
+	var st := String(own.get("status", "flying"))
+	return st == "crashed" or (st == "landed" and float(own.get("gs", 1.0)) <= 0.0)
 
 
 func player_name(id: int) -> String:
@@ -387,6 +434,13 @@ func _s_ptt(on: Variant) -> void:
 	_flush_local()
 
 
+@rpc("any_peer", "call_remote", "reliable", CHANNEL_RELIABLE)
+func _s_dl(msg: Variant) -> void:
+	var id := _client_sender()
+	if id != 0:
+		_reply(id, _room.handle_dl(id, msg))
+
+
 ## The remote sender if this is the host and the message is within the rate limit, else 0.
 ## Messages from peers that never joined the room are dropped except the hello.
 func _client_sender() -> int:
@@ -437,7 +491,13 @@ func _deliver(kind: String, p: Dictionary) -> void:
 			radar_swept.emit(radar)
 		"radio":
 			radio_tx.assign(p.get("tx", []))
+			dl_tx.assign(p.get("dl", []))
 			radio_changed.emit(radio_tx)
+		"dl":
+			var m: Dictionary = p.get("msg", {})
+			if not m.is_empty() and phase == "playing":
+				_log_dl(m)
+				datalink.emit(m)
 		"event":
 			var ev: Dictionary = p.get("event", {})
 			events.append(ev)
@@ -482,10 +542,24 @@ func _on_begin(p: Dictionary) -> void:
 	events.clear()
 	result = {}
 	radio_tx.clear()
+	dl_tx.clear()
+	dl_log.clear()
 	round_time = 0.0
 	_ptt_on = false
 	round_began.emit()
 	_set_phase("playing")
+
+
+## Keep one entry per message id (a later status replaces the earlier one in place).
+func _log_dl(m: Dictionary) -> void:
+	var mid := int(m.get("id", 0))
+	for i in range(dl_log.size() - 1, maxi(-1, dl_log.size() - 40), -1):
+		if int(dl_log[i].get("id", -1)) == mid:
+			dl_log[i] = m
+			return
+	dl_log.append(m)
+	if dl_log.size() > DL_LOG_MAX:
+		dl_log.pop_front()
 
 
 # ---------------------------------------------------------------- connection events
@@ -568,8 +642,10 @@ func _mirror_room() -> void:
 		return
 	var st := _room.state()
 	var sig := JSON.stringify(st)
-	if _room.tx != radio_tx:
+	var room_dl := _room.dl_tx()
+	if _room.tx != radio_tx or room_dl != dl_tx:
 		radio_tx.assign(_room.tx)
+		dl_tx.assign(room_dl)
 		radio_changed.emit(radio_tx)
 	if sig == _mirror_sig:
 		return
@@ -650,10 +726,13 @@ func _clear_round() -> void:
 	own = {}
 	radar.clear()
 	radio_tx.clear()
+	dl_tx.clear()
+	dl_log.clear()
 	events.clear()
 	result = {}
 	round_time = 0.0
 	_ptt_on = false
+	fast_forward = false
 
 
 ## Drop any session (closing the peer ends it for every client if we host).

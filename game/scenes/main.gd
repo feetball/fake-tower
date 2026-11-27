@@ -58,6 +58,9 @@ func _ready() -> void:
 
 	if DebugState.wanted():
 		add_child(DebugState.new())
+	var reader := ReadAloud.new()
+	reader.name = "ReadAloud"
+	add_child(reader)
 
 	var demo_screen := _user_arg("--ui-demo=")
 	if demo_screen != "":

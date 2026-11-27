@@ -61,6 +61,9 @@ var _volume: float = 1.0
 var _phase: String = ""
 var _my_id: int = 1
 var _tx: Array = []
+## Voice keyers plus whoever has a text message on the air (Session.dl_tx): the
+## frequency as everyone hears it. Only _tx (push-to-talk) ever opens our microphone.
+var _air: Array = []
 var _sig: String = ""
 var _poll_t: float = 0.0
 
@@ -250,6 +253,7 @@ func _on_phase_changed(_p: String) -> void:
 func _read_session() -> void:
 	_phase = ""
 	_tx = []
+	_air = []
 	if _session == null:
 		return
 	var ph: Variant = _session.get("phase")
@@ -261,6 +265,12 @@ func _read_session() -> void:
 	var tx: Variant = _session.get("radio_tx")
 	if tx is Array:
 		_tx = tx
+	_air = _tx.duplicate()
+	var dl: Variant = _session.get("dl_tx")
+	if dl is Array:
+		for id: Variant in dl:
+			if not _air.has(id):
+				_air.append(id)
 
 
 func _refresh() -> void:
@@ -279,7 +289,7 @@ func _refresh() -> void:
 	if was_dedicated != _dedicated:
 		_update_mic()
 
-	var aud: Dictionary = Logic.compute_audibility(mode, _my_id, _tx, _rx.keys())
+	var aud: Dictionary = Logic.compute_audibility(mode, _my_id, _air, _rx.keys())
 	var gains: Dictionary = aud["gains"]
 	var bus: String = RadioFx.BUS_RADIO if aud["radio"] else RadioFx.BUS_CLEAN
 	for id: int in _rx:
@@ -375,7 +385,7 @@ func _process(delta: float) -> void:
 			_poll_t = 0.0
 			var ph: Variant = _session.get("phase")
 			var tx: Variant = _session.get("radio_tx")
-			var sig: String = "%s|%s" % [ph, tx]
+			var sig: String = "%s|%s|%s" % [ph, tx, _session.get("dl_tx")]
 			if sig != _sig:
 				_sig = sig
 				_refresh()
@@ -491,7 +501,7 @@ func debug_send_tone(n: int) -> void:
 ## Host only: apply the relay rule, forward to everyone but the sender, play locally.
 func _relay(sender: int, packet: PackedByteArray) -> void:
 	_read_session()
-	if not Logic.should_forward(_phase, _tx, sender):
+	if not Logic.should_forward(_phase, _air, sender):
 		return
 	for peer in multiplayer.get_peers():
 		if peer != sender:

@@ -186,7 +186,9 @@ func refresh() -> void:
 
 
 func _process(delta: float) -> void:
-	_clock.text = UiText.mmss(Sess.round_time())
+	var ff := bool(Sess.val(&"fast_forward", false))
+	_clock.text = UiText.mmss(Sess.round_time()) + ("  ▶▶" if ff else "")
+	_clock.tooltip_text = "Your flight is over: the other aircraft play out fast" if ff else "Round time"
 	_blink += delta
 	if _radio_kind == "blocked":
 		_radio_label.modulate.a = 0.55 + 0.45 * absf(sin(_blink * 7.0))
@@ -200,7 +202,7 @@ func _process(delta: float) -> void:
 func _refresh_radio() -> void:
 	var own: Dictionary = Sess.val(&"own", {})
 	var dead := str(own.get("status", "")) == "crashed"
-	var st := UiText.radio_state(Sess.radio_tx(), Sess.my_id(), _sent_ptt, dead)
+	var st := UiText.radio_state(Sess.radio_tx(), Sess.my_id(), _sent_ptt, dead, Sess.val(&"dl_tx", []))
 	_radio_kind = st["kind"]
 	var col: Color = RADIO_COLORS.get(_radio_kind, UiTheme.DIM)
 	_radio_label.text = st["text"]

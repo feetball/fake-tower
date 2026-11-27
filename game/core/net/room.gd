@@ -2,7 +2,14 @@ extends RefCounted
 ## Lobby, roles, the round loop and radio arbitration (port of src/server/rooms.ts).
 ## Transport-agnostic: everything leaves through `send(to_id, kind, payload)`, which
 ## Session wires to RPCs and the tests to a recorder. Runs only on the host.
-## Message kinds: room, begin, own, radar, radio, event, end, error.
+## Message kinds: room, begin, own, radar, radio, event, end, error, dl.
+##
+## Text radio (core/net/datalink.gd; not in the TS version): handle_dl() queues a
+## message; it goes out only once the frequency is clear (nobody keyed by voice, no
+## other text on the air), occupies the frequency for its airtime (the sender is in
+## `radio.dl`, never in `radio.tx`, so no microphone opens), and is "blocked" when
+## anyone keys up during that time. Then everyone gets it (`dl`); dl_hook lets the
+## AI controllers and pilots hear it too.
 
 const SimRng := preload("res://core/sim/rng.gd")
 const SimRound := preload("res://core/sim/round.gd")
@@ -10,6 +17,7 @@ const SimAircraft := preload("res://core/sim/aircraft.gd")
 const Geo := preload("res://core/sim/geo.gd")
 const WorldDef := preload("res://core/world.gd")
 const Validate := preload("res://core/net/validate.gd")
+const Datalink := preload("res://core/net/datalink.gd")
 
 const MAX_PLAYERS := 8
 const TICK_HZ := 10
@@ -18,6 +26,12 @@ const RADAR_SWEEP_SEC := 2.0
 const SWEEP_TICKS := 20 ## RADAR_SWEEP_SEC * TICK_HZ
 ## A stalled host catches up at most this many steps per frame, then drops the rest.
 const MAX_CATCHUP_STEPS := 10
+## Text messages one sender may have waiting or on the air.
+const DL_QUEUE_MAX := 3
+## A text message waits this long for a clear frequency, then is dropped.
+const DL_WAIT_MAX_SEC := 30.0
+## Clear-frequency pause before the next text message, so a voice can get in.
+const DL_GAP_SEC := 0.5
 
 
 class Roles:
@@ -41,9 +55,17 @@ var sim: SimRound = null
 var roles: Roles = null
 ## Called before every simulation sub-step (demo AI pilots).
 var ai_hook := Callable()
+## Called with every text message once it has aired (any status but "queued"), so AI
+## players hear the frequency. Gets a copy with the full text.
+var dl_hook := Callable()
 var _send: Callable
 var _sim_ticks := 0
 var _carry := 0.0
+var _dl_seq := 0
+var _dl_queue: Array[Dictionary] = [] ## {msg, waited}
+var _dl_air: Dictionary = {} ## {msg, left, blocked} while a text message is on the air
+var _dl_gap := 0.0
+var _dl_last: Dictionary = {} ## sender id -> tick their last text message ended (round robin)
 
 
 func _init(send: Callable, rng_in: SimRng, min_players_in: int = 4) -> void:
@@ -195,6 +217,7 @@ func disconnect_player(id: int) -> void:
 		return
 	p["connected"] = false
 	set_ptt(id, false)
+	_dl_drop_sender(id)
 	if phase == "lobby":
 		players.erase(p)
 	if id == host_id:
@@ -232,6 +255,7 @@ func begin_round(r: Roles, s: SimRound) -> void:
 	_sim_ticks = 0
 	_carry = 0.0
 	phase = "playing"
+	_dl_reset()
 	_clear_ptt()
 	var roster := round_players()
 	for p in players:
@@ -245,6 +269,10 @@ func end_round() -> void:
 	if sim == null or phase != "playing":
 		return
 	phase = "ended"
+	var was_on_air := not _dl_air.is_empty()
+	_dl_reset()
+	if was_on_air and tx.is_empty():
+		_broadcast_radio()
 	_clear_ptt()
 	broadcast("end", {"result": sim.result(roles.real_controller_id, roles.impostor_id)})
 	broadcast_state()
@@ -306,6 +334,8 @@ func _sub_step() -> void:
 				var ac: SimAircraft = sim.by_callsign(cs)
 				if ac != null:
 					set_ptt(ac.player_id, false)
+					_dl_drop_sender(ac.player_id)
+	_dl_step(DT)
 
 
 ## `own` to each pilot (only their own aircraft); `radar` to the controllers only.
@@ -351,11 +381,183 @@ func set_ptt(id: int, on: bool) -> void:
 		if not keyed:
 			return
 		tx.erase(id)
-	broadcast("radio", {"tx": plain(tx)})
+	_broadcast_radio()
 
 
 func _clear_ptt() -> void:
 	if tx.is_empty():
 		return
 	tx.clear()
-	broadcast("radio", {"tx": []})
+	_broadcast_radio()
+
+
+## `radio`: who is keyed by voice (tx) and who has a text message on the air (dl).
+func _broadcast_radio() -> void:
+	broadcast("radio", {"tx": plain(tx), "dl": plain(dl_tx())})
+
+
+# ---------------------------------------------------------------- text radio
+
+## Ids with a text message on the air right now (at most one).
+func dl_tx() -> Array[int]:
+	var out: Array[int] = []
+	if not _dl_air.is_empty():
+		out.append(int(_dl_air["msg"]["from"]))
+	return out
+
+
+## Messages `id` has waiting or on the air.
+func dl_pending(id: int) -> int:
+	var n := 0
+	for q in _dl_queue:
+		if int(q["msg"]["from"]) == id:
+			n += 1
+	if not _dl_air.is_empty() and int(_dl_air["msg"]["from"]) == id:
+		n += 1
+	return n
+
+
+## A text message from a player (or an AI player) for the frequency. Returns "" or an error.
+func handle_dl(id: int, raw: Variant) -> String:
+	if phase != "playing" or sim == null:
+		return "No round in progress"
+	var role := role_of(id)
+	var p := find(id)
+	if role == "" or p.is_empty() or not p["connected"]:
+		return "Not in this round"
+	if not can_transmit(id):
+		return "Your radio is dead"
+	var m := {}
+	var err := Datalink.parse(raw, role, m)
+	if err != "":
+		return err
+	if m["kind"] == Datalink.KIND_CLR and sim.by_callsign(String(m["to"])) == null:
+		return "No aircraft %s" % m["to"]
+	if m["kind"] == Datalink.KIND_REPLY and int(m["re"]) > _dl_seq:
+		return "Bad message: re"
+	var accused := Datalink.find_item(m, "accuse")
+	if not accused.is_empty():
+		var who := int(accused["who"])
+		if who == id or role_of(who) != "controller":
+			return "Only a controller can be called out"
+	if dl_pending(id) >= DL_QUEUE_MAX:
+		return "Frequency busy: wait for your messages to go out"
+	_dl_seq += 1
+	var ac: SimAircraft = sim.by_player(id)
+	m["id"] = _dl_seq
+	m["from"] = id
+	m["role"] = role
+	m["from_cs"] = ac.callsign if ac != null else ""
+	m["time"] = Geo.js_round(sim.time * 10.0) / 10.0
+	m["text"] = ""
+	m["status"] = "queued"
+	_dl_queue.append({"msg": m, "waited": 0.0})
+	send_to(id, "dl", {"msg": m.duplicate(true)})
+	return ""
+
+
+func _dl_reset() -> void:
+	_dl_queue.clear()
+	_dl_air = {}
+	_dl_gap = 0.0
+	_dl_last.clear()
+
+
+## Drop what `id` has queued or on the air (left the room, crashed).
+func _dl_drop_sender(id: int) -> void:
+	var keep: Array[Dictionary] = []
+	for q in _dl_queue:
+		if int(q["msg"]["from"]) != id:
+			keep.append(q)
+	_dl_queue = keep
+	if not _dl_air.is_empty() and int(_dl_air["msg"]["from"]) == id:
+		var m: Dictionary = _dl_air["msg"]
+		_dl_air = {}
+		_dl_gap = DL_GAP_SEC
+		_broadcast_radio()
+		m["status"] = "cut"
+		_dl_notify_sender(m)
+
+
+func _dl_step(dt: float) -> void:
+	if not _dl_air.is_empty():
+		if not tx.is_empty():
+			_dl_air["blocked"] = true
+		_dl_air["left"] = float(_dl_air["left"]) - dt
+		if float(_dl_air["left"]) > 1e-6:
+			return
+		var m: Dictionary = _dl_air["msg"]
+		m["status"] = "blocked" if bool(_dl_air["blocked"]) else "ok"
+		m["time"] = Geo.js_round(sim.time * 10.0) / 10.0
+		_dl_last[int(m["from"])] = _sim_ticks
+		_dl_air = {}
+		_dl_gap = DL_GAP_SEC
+		_broadcast_radio()
+		_dl_deliver(m)
+		return
+	var keep: Array[Dictionary] = []
+	for q in _dl_queue:
+		q["waited"] = float(q["waited"]) + dt
+		if float(q["waited"]) >= DL_WAIT_MAX_SEC:
+			var m: Dictionary = q["msg"]
+			m["status"] = "expired"
+			_dl_notify_sender(m)
+		else:
+			keep.append(q)
+	_dl_queue = keep
+	_dl_gap -= dt
+	if _dl_gap > 0.0 or not tx.is_empty() or _dl_queue.is_empty():
+		return
+	# Round robin: the sender who had the frequency least recently goes first.
+	var best := 0
+	for i in range(1, _dl_queue.size()):
+		var a := int(_dl_last.get(int(_dl_queue[i]["msg"]["from"]), -1))
+		var b := int(_dl_last.get(int(_dl_queue[best]["msg"]["from"]), -1))
+		if a < b:
+			best = i
+	var msg: Dictionary = _dl_queue.pop_at(best)["msg"]
+	msg["text"] = Datalink.render(msg, dl_context(msg))
+	_dl_air = {"msg": msg, "left": Datalink.airtime(String(msg["text"])), "blocked": false}
+	_broadcast_radio()
+
+
+## What the phraseology needs to know, as the host sees it now.
+func dl_context(m: Dictionary) -> Dictionary:
+	var names := {}
+	for p in players:
+		names[int(p["id"])] = String(p["name"])
+	var ctx := {
+		"letter": String(sim.atis.get("letter", "")), "qnh": sim.qnh,
+		"wind_dir": int(sim.atis.get("wind_dir", 0)), "wind_kt": int(sim.atis.get("wind_kt", 0)),
+		"from_cs": String(m.get("from_cs", "")), "names": names,
+	}
+	var to: SimAircraft = sim.by_callsign(String(m.get("to", ""))) if String(m.get("to", "")) != "" else null
+	if to != null:
+		ctx["to_alt"] = to.alt
+	var mine: SimAircraft = sim.by_player(int(m.get("from", 0)))
+	if mine != null:
+		ctx["fuel_min"] = mine.fuel_min
+		ctx["ind_alt"] = int(Geo.js_round(mine.indicated_alt(sim.qnh) / 100.0)) * 100
+	return ctx
+
+
+## Everyone hears an aired message; a blocked one carries its text to the sender only.
+func _dl_deliver(m: Dictionary) -> void:
+	var blocked := String(m["status"]) == "blocked"
+	for p in players:
+		if not p["connected"]:
+			continue
+		var out := m.duplicate(true)
+		if blocked and int(p["id"]) != int(m["from"]):
+			out["text"] = ""
+		send_to(int(p["id"]), "dl", {"msg": out})
+	if dl_hook.is_valid():
+		dl_hook.call(m.duplicate(true))
+
+
+func _dl_notify_sender(m: Dictionary) -> void:
+	var p := find(int(m["from"]))
+	if not p.is_empty() and p["connected"]:
+		send_to(int(m["from"]), "dl", {"msg": m.duplicate(true)})
+	if dl_hook.is_valid():
+		dl_hook.call(m.duplicate(true))

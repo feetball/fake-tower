@@ -1,7 +1,8 @@
 extends PanelContainer
 ## Flight-data display beside the scope: controllers on frequency, the
-## selected target's strip with a local scratchpad, the traffic list, the event
-## log, then ATIS, the approach summary and a collapsible phraseology card.
+## selected target's strip with a local scratchpad, the text-radio composer
+## (clearance_card.gd), the traffic list, the event log, then (tabs) the
+## frequency transcript, ATIS, the approach summary and the phraseology card.
 ## Layout is in 1080p canvas units; the view places it over the side display.
 
 const Look := preload("res://scenes/controller/scope/scope_theme.gd")
@@ -9,8 +10,11 @@ const Fmt := preload("res://scenes/controller/scope/scope_format.gd")
 const Model := preload("res://scenes/controller/scope/scope_model.gd")
 const S := preload("res://scenes/controller/panel/fdd_style.gd")
 const Phrases := preload("res://scenes/controller/panel/phraseology.gd")
+const ClearanceCard := preload("res://scenes/controller/panel/clearance_card.gd")
+const Datalink := preload("res://core/net/datalink.gd")
 
-const LOG_LINES := 7
+const LOG_LINES := 5
+const FREQ_LINES := 14
 const CELL_LABELS := {"ALT": "ALT FT", "GS": "GS KT", "TRK": "TRK", "DME": "DME NM", "MSA": "MSA"}
 
 var model: Model
@@ -31,8 +35,10 @@ var _log: VBoxContainer
 var _atis_text: Label
 var _approach: VBoxContainer
 var _tabs: Dictionary = {} ## tab id -> Button
-var _tab := "atis" ## "atis" | "app" | "phr"
+var _tab := "freq" ## "freq" | "atis" | "app" | "phr"
 var _phr_body: VBoxContainer
+var _freq: VBoxContainer
+var _card: ClearanceCard
 var _shown_cs := ""
 
 
@@ -44,6 +50,13 @@ func _ready() -> void:
 	add_theme_stylebox_override(&"panel", S.box(Look.FDD_BG, Color.TRANSPARENT, 0, 14, 10, 0))
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	_build()
+	Session.datalink.connect(func(_m: Dictionary) -> void: _refresh_freq())
+
+
+## Focus the composer's shorthand line (Enter on the scope).
+func focus_command() -> void:
+	if _card != null:
+		_card.focus_command()
 
 
 ## Rebuilds with larger text when the window is small (see FddStyle.text_scale).
@@ -67,6 +80,10 @@ func _build() -> void:
 	root.add_child(_header())
 	root.add_child(S.heading("Flight strip"))
 	root.add_child(_strip_card())
+	root.add_child(S.heading("Datalink clearance"))
+	_card = ClearanceCard.new()
+	_card.model = model
+	root.add_child(_card)
 	root.add_child(S.heading("Traffic"))
 	_traffic = S.vbox(1)
 	root.add_child(_traffic)
@@ -86,6 +103,8 @@ func _build() -> void:
 	_atis_text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_atis_text.custom_minimum_size = Vector2(100, 0)
 	lower.add_child(_atis_text)
+	_freq = S.vbox(5)
+	lower.add_child(_freq)
 	_approach = S.vbox(4)
 	lower.add_child(_approach)
 	_phr_body = S.vbox(4)
@@ -98,14 +117,14 @@ func _build() -> void:
 ## scrolling: ATIS, the approach summary, and the (collapsible) phraseology.
 func _tab_row() -> Control:
 	var row := S.hbox(4)
-	for t: Array in [["atis", "ATIS"], ["app", "ILS RWY 27"], ["phr", "PHRASEOLOGY"]]:
+	for t: Array in [["freq", "FREQUENCY"], ["atis", "ATIS"], ["app", "ILS RWY 27"], ["phr", "PHRASEOLOGY"]]:
 		var id := String(t[0])
 		var b := S.flat_button(String(t[1]), 13, Look.FDD_HEAD)
 		b.alignment = HORIZONTAL_ALIGNMENT_CENTER
 		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		b.pressed.connect(func() -> void:
-			# The phraseology card collapses back to the ATIS when clicked again.
-			_select_tab("atis" if id == "phr" and _tab == "phr" else id))
+			# The phraseology card collapses back to the frequency when clicked again.
+			_select_tab("freq" if id == "phr" and _tab == "phr" else id))
 		_tabs[id] = b
 		row.add_child(b)
 	return row
@@ -126,7 +145,9 @@ func _select_tab(id: String) -> void:
 		b.add_theme_stylebox_override(&"hover", sb)
 	_atis_text.visible = id == "atis"
 	_approach.visible = id == "app"
+	_freq.visible = id == "freq"
 	_refresh_phraseology()
+	_refresh_freq()
 
 
 func _header() -> Control:
@@ -254,6 +275,8 @@ func refresh_static() -> void:
 		h.add_child(v)
 		_approach.add_child(h)
 	_refresh_controllers()
+	if _card != null:
+		_card.refresh_calls()
 	_select_tab(_tab)
 
 
@@ -285,11 +308,14 @@ func _refresh_strip() -> void:
 	_strip.visible = cs != ""
 	_strip_empty.visible = cs == ""
 	if cs == "":
+		if _shown_cs != "":
+			_card.set_target("")
 		_shown_cs = ""
 		return
 	if cs != _shown_cs:
 		_shown_cs = cs
 		_scratch.text = String(model.scratch.get(cs, ""))
+		_card.set_target(cs)
 		_refresh_phraseology()
 	_cs.text = cs
 	_pilot.text = _pilot_name(cs)
@@ -391,7 +417,70 @@ func _refresh_log() -> void:
 
 
 func set_phraseology_open(on: bool) -> void:
-	_select_tab("phr" if on else "atis")
+	_select_tab("phr" if on else "freq")
+
+
+## The frequency as heard: the latest text transmissions, newest last; replies to
+## us and our own messages marked.
+func _refresh_freq() -> void:
+	if _freq == null:
+		return
+	for c in _freq.get_children():
+		c.queue_free()
+	if _tab != "freq":
+		return
+	var log: Array[Dictionary] = Session.dl_log
+	if log.is_empty():
+		var hint := S.label("Nothing on the text radio yet. Select a target, set HDG / ALT / SPD or type a command (Enter), then SEND. Pilots reply here.", 14,
+			Look.FDD_FAINT, Look.sans(400))
+		hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		hint.custom_minimum_size = Vector2(80, 0)
+		_freq.add_child(hint)
+		return
+	for i in range(maxi(0, log.size() - FREQ_LINES), log.size()):
+		var m: Dictionary = log[i]
+		var mine := int(m.get("from", 0)) == Session.my_id
+		var status := String(m.get("status", ""))
+		var h := S.hbox(8)
+		var tl := S.label(Fmt.mmss(float(m.get("time", 0.0))), 13, Look.FDD_FAINT, Look.mono(500))
+		tl.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+		h.add_child(tl)
+		var who := S.label("YOU" if mine else Datalink.sender_label(m, _player_name(int(m.get("from", 0)))), 13,
+			Look.FDD_DIM if mine else (Look.FDD_ACCENT if String(m.get("role", "")) == "controller" else Look.FDD_TEXT), Look.mono(700))
+		who.custom_minimum_size = Vector2(92, 0)
+		who.clip_text = true
+		who.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+		h.add_child(who)
+		var text := String(m.get("text", ""))
+		var col := Look.FDD_TEXT if not mine else Look.FDD_DIM
+		match status:
+			"queued":
+				text = "waiting for a clear frequency…"
+				col = Look.FDD_FAINT
+			"blocked":
+				text = "BLOCKED" + (": " + text if text != "" else "")
+				col = Look.FDD_RED
+			"expired":
+				text = "NOT SENT: the frequency never cleared"
+				col = Look.FDD_RED
+			"cut":
+				text = "CUT OFF"
+				col = Look.FDD_RED
+		if String(m.get("kind", "")) == Datalink.KIND_REPLY and Datalink.has_item(m, "unable"):
+			col = Look.FDD_AMBER
+		var l := S.label(text, 14, col, Look.sans(400))
+		l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		l.custom_minimum_size = Vector2(80, 0)
+		h.add_child(l)
+		_freq.add_child(h)
+
+
+func _player_name(id: int) -> String:
+	for p: Dictionary in Session.round_players:
+		if int(p.get("id", 0)) == id:
+			return String(p.get("name", ""))
+	return "?"
 
 
 func _refresh_phraseology() -> void:

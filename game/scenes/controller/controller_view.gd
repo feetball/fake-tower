@@ -98,6 +98,7 @@ func _ready() -> void:
 		_panel.refresh()
 		_mark_panel_dirty())
 	Session.round_began.connect(_on_round_began)
+	Session.datalink.connect(func(_m: Dictionary) -> void: _mark_panel_dirty())
 	get_viewport().size_changed.connect(_layout)
 
 	_on_round_began()
@@ -359,7 +360,12 @@ func _unhandled_input(e: InputEvent) -> void:
 		return
 	if not e is InputEventKey or _typing():
 		return
-	if _scope.input.key(e as InputEventKey):
+	var k := e as InputEventKey
+	if k.pressed and not k.echo and (k.keycode == KEY_ENTER or k.keycode == KEY_KP_ENTER):
+		_panel.focus_command() # the text-radio shorthand for the selected target
+		get_viewport().set_input_as_handled()
+		return
+	if _scope.input.key(k):
 		get_viewport().set_input_as_handled()
 
 

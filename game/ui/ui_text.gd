@@ -46,20 +46,28 @@ static func mmss(sec: float) -> String:
 
 
 ## {text, kind} for the radio indicator. kind: idle | rx | tx | blocked | dead.
-static func radio_state(tx: Array, my_id: int, local_ptt: bool, radio_dead: bool) -> Dictionary:
-	if tx.size() >= 2:
+## `dl`: ids with a text message on the air (Session.dl_tx); they occupy the frequency too.
+static func radio_state(tx: Array, my_id: int, local_ptt: bool, radio_dead: bool, dl: Array = []) -> Dictionary:
+	var on_air: Array = tx.duplicate()
+	for id: Variant in dl:
+		if not on_air.has(id):
+			on_air.append(id)
+	if on_air.size() >= 2:
 		return {"text": "BLOCKED", "kind": "blocked"}
-	if tx.size() == 1:
-		var id := int(tx[0])
+	if on_air.size() == 1:
+		var id := int(on_air[0])
+		var text_msg := dl.has(id) and not tx.has(id)
 		if id == my_id:
-			return {"text": "TX", "kind": "tx"}
+			return {"text": "TX  TEXT" if text_msg else "TX", "kind": "tx"}
 		var rp := Sess.round_player(id)
 		var nm := Sess.player_name(id)
 		var tag := nm
 		if str(rp.get("role", "")) == "pilot" and str(rp.get("callsign", "")) != "":
 			tag = str(rp["callsign"])
+		if text_msg:
+			tag += " · TEXT"
 		elif str(rp.get("role", "")) == "controller":
-			tag = "%s · CTL" % nm
+			tag += " · CTL"
 		return {"text": "RX  " + tag, "kind": "rx"}
 	if local_ptt:
 		if radio_dead:
@@ -84,6 +92,9 @@ static func role_line() -> Dictionary:
 			if ctl.is_empty():
 				return {"text": "%s  ·  Practice flight — no controllers on frequency." % Sess.my_callsign(),
 					"kind": "pilot"}
+			if ctl.size() == 1:
+				return {"text": "%s  ·  %s is the controller on frequency. Replies: W wilco, U unable." % [
+					Sess.my_callsign(), ctl[0]], "kind": "pilot"}
 			return {"text": "%s  ·  Two controllers on frequency: %s. One is the impostor." % [
 				Sess.my_callsign(), " and ".join(ctl)], "kind": "pilot"}
 		"controller":
