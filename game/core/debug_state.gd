@@ -37,6 +37,8 @@ func _process(delta: float) -> void:
 		"app_armed": bool(own.get("app_armed", false)),
 		"gear_down": bool(own.get("gear_down", false)),
 		"flaps": int(own.get("flaps", -1)),
+		"dl": Session.dl_log.size(),
+		"t": int(Session.round_time),
 	}
 	s["targets"] = _targets()
 	var j := JSON.stringify(s)

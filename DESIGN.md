@@ -41,6 +41,39 @@ communicates during a round.
 
 The lobby and end screen use open-mic clean audio.
 
+### Text radio (Godot version)
+
+Everything said on the frequency can also be sent as a structured text message
+instead of by voice, so nobody needs a microphone: controller clearances
+(heading, altitude, speed, QNH, cleared ILS, cleared to land, go around, 360s,
+alerts), pilot replies (wilco, unable with a reason, standby, say again) and calls
+(check in, minimum fuel, mayday, going around), and calling a controller out.
+Messages are lists of standard items, never free text; the host renders the
+phraseology. They share the one frequency:
+
+- A message waits until the frequency is clear, then occupies it for about its
+  speaking time (1.5–6 s). The sender's microphone never opens.
+- Anyone keying up while it is on the air blocks it: nobody gets it, the sender
+  can resend. A message that cannot get out within 30 s is dropped.
+- Everyone sees every message, as everyone hears every voice.
+
+The deduction is unchanged: an impostor's text instruction has the same tells
+as a spoken one.
+
+## Solo practice (Godot version)
+
+Offline rounds with AI players on the text radio:
+
+- **AI tower**: you fly; an AI approach controller works you and two AI aircraft.
+- **Spot the impostor**: you and one AI aircraft; two AI controllers, one of them
+  the impostor targeting you (wrong QNH, descents below the MSA, vectors into
+  terrain, fuel-burning vectors), the other correcting it and calling it out.
+- **Be the controller**: four AI pilots fly what you send them, read back, and
+  refuse unsafe instructions.
+
+AI players see only what their role sees (a controller: the radar picture and the
+frequency) and act only through the text radio and, for a pilot, its own autopilot.
+
 ## What makes it deducible
 
 Pilots can catch the impostor only by knowing procedure. They have, in the

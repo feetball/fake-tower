@@ -11,7 +11,7 @@ const CONTROLLER_LINES := [
 const PILOT_LINES := [
 	"You fly a twin jet in fog through the autopilot panel. No traffic display.",
 	"Check every instruction against the ATIS and the approach plate: QNH, MSA, platform altitude 3000.",
-	"Only you see your fuel. Declare \"minimum fuel\" by voice.",
+	"Only you see your fuel. Declare \"minimum fuel\" (voice, or CALLS on the text radio).",
 	"To land: established on localizer and glideslope, gear down, flaps 3, 155 kt or less.",
 ]
 ## Controls reference for the full overlay: [key or input, what it does].
@@ -30,6 +30,8 @@ const PILOT_KEYS := [
 	["Wheel, drag", "Turn the knob under the cursor (Shift: big steps)"],
 	["Click", "Gear lever, flap lever, APPR, baro knob (STD), master warning"],
 	["Space", "Push-to-talk (hold)"],
+	["W / U / S / R", "Text radio: WILCO / UNABLE / STANDBY / SAY AGAIN to the newest instruction for you"],
+	["C · T", "Text radio: calls (check in, min fuel, mayday, call out...) · more lines"],
 ]
 const CONTROLLER_KEYS := [
 	["Wheel", "Zoom the scope at the cursor"],
@@ -45,6 +47,8 @@ const CONTROLLER_KEYS := [
 	["Tab", "Switch between scope and room view"],
 	["Hold RMB off scope", "Look around the room"],
 	["CA / LA", "Conflict (under 3 nm and 1000 ft) / below MSA, not on the localizer"],
+	["Enter", "Text radio: type an instruction for the selected target (l240 a55 s180 app), Enter sends"],
+	["Panel", "Or click HDG / ALT / SPD / QNH and the chips under the flight strip, then SEND"],
 	["Space", "Push-to-talk (hold)"],
 ]
 ## Touch controls (shown first in the overlay when the touch UI is active).
@@ -58,6 +62,7 @@ const PILOT_TOUCH := [
 	["MASTER WARN", "Acknowledge the warning light"],
 	["Tap / drag a cockpit control", "Works too: knobs turn by dragging"],
 	["PTT (bottom right)", "Hold to talk — works while the other hand uses the controls"],
+	["DATALINK (top right)", "Text radio: WILCO / UNABLE / STANDBY / SAY AGAIN, and CALLS"],
 ]
 const CONTROLLER_TOUCH := [
 	["Drag · pinch", "Pan · zoom the scope"],
@@ -69,8 +74,9 @@ const CONTROLLER_TOUCH := [
 	["DESEL", "Deselect and clear the measuring line"],
 	["ROOM", "Scope / room view; drag off the scope to look around"],
 	["PTT · MENU", "Hold to talk · settings (top strip)"],
+	["Flight data panel", "Text radio: tap HDG / ALT / SPD / QNH and the chips for the selected target, then SEND"],
 ]
-const RADIO_LINE := "One frequency, push-to-talk on Space. Two people keying at once block it — nobody hears anything but a squeal."
+const RADIO_LINE := "One frequency, push-to-talk on Space. Two people keying at once block it — nobody hears anything but a squeal. No microphone? Everything can go over the text radio instead: it waits for a clear frequency, and anyone keying while it airs blocks it."
 
 
 static func build(compact: bool = false) -> VBoxContainer:

@@ -42,6 +42,9 @@ const LANDED_CAPTION_KT := 40.0
 
 var _landed_t := -1.0
 var _fuel_cut_t := -1.0
+## The text radio panel (scenes/pilot/datalink), over the EFB and the crash cut: a
+## crashed pilot can no longer transmit, but still hears the frequency.
+var datalink: PilotDatalink
 
 
 func _ready() -> void:
@@ -63,7 +66,13 @@ func _ready() -> void:
 	flight.touchdown.connect(_on_touchdown)
 	flight.crashed.connect(_on_crashed)
 	flight.sample.connect(_on_sample)
-	efb.visibility_changed_to.connect(func(open: bool) -> void: interaction.enabled = not open)
+	datalink = PilotDatalink.new()
+	datalink.name = "Datalink"
+	efb.get_parent().add_child(datalink)
+	efb.get_parent().move_child(datalink, outcome_overlay.get_index() + 1)
+	efb.visibility_changed_to.connect(func(open: bool) -> void:
+		interaction.enabled = not open
+		datalink.compact = open)
 	rig.view_changed.connect(func(_v: String) -> void: hint.flash(2.5))
 	if TouchMode.active():
 		_add_touch_controls()
@@ -113,6 +122,7 @@ func _on_touchdown(sink_fpm: float) -> void:
 func _on_crashed(outcome: String) -> void:
 	audio.crash(outcome)
 	hint.visible = false
+	datalink.refresh()
 	var cs := String(flight.own.get("callsign", Session.my_callsign))
 	if outcome == "fuel":
 		# Power fails as the engines run down; then the cut.
@@ -190,6 +200,8 @@ func _apply_reserved_top() -> void:
 	if hud != null and hud.has_method(&"get_reserved_top_px"):
 		px = maxf(float(hud.call(&"get_reserved_top_px")) + 12.0, 70.0)
 	efb.top_reserved = px
+	datalink.top_reserved = px
+	datalink.refresh()
 
 
 func _style_tooltip() -> void:

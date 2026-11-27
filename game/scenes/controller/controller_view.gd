@@ -98,6 +98,7 @@ func _ready() -> void:
 		_panel.refresh()
 		_mark_panel_dirty())
 	Session.round_began.connect(_on_round_began)
+	Session.datalink.connect(func(_m: Dictionary) -> void: _mark_panel_dirty())
 	get_viewport().size_changed.connect(_layout)
 
 	_on_round_began()
@@ -359,7 +360,15 @@ func _unhandled_input(e: InputEvent) -> void:
 		return
 	if not e is InputEventKey or _typing():
 		return
-	if _scope.input.key(e as InputEventKey):
+	var k := e as InputEventKey
+	if k.pressed and not k.echo and (k.keycode == KEY_ENTER or k.keycode == KEY_KP_ENTER):
+		# The text-radio shorthand for the selected target; the panel takes input only
+		# as the overlay at the scope (in the room view it is a texture on the 3D display).
+		if _camera.at_scope() and _panel.get_parent() == _panel_host:
+			_panel.focus_command()
+			get_viewport().set_input_as_handled()
+		return
+	if _scope.input.key(k):
 		get_viewport().set_input_as_handled()
 
 

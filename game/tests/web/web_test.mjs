@@ -7,7 +7,8 @@
 // game/tools/export_build.sh web). Screenshots and logs go to --out (default
 // build/web-test). Tests (all by default):
 //   load        index.html loads, the menu renders, no console errors
-//   demo        ?demo=controller and ?demo=pilot start an offline round and render
+//   demo        ?demo=controller, ?demo=pilot and ?demo=solo_controller (AI pilots on the
+//               text radio) start an offline round and render
 //   touch       phone emulation (landscape, touch): the touch UI is up; a finger holds
 //               PTT while another taps the autopilot strip (HDG tab, +)
 //   multiplayer a headless dedicated server (needs Godot: env GODOT, else `godot` on
@@ -225,17 +226,34 @@ async function testLoad(browser, base) {
 }
 
 async function testDemo(browser, base) {
-  for (const role of ['controller', 'pilot']) {
+  // [demo, role]: "solo_controller" has four AI pilots checking in over the text radio
+  // (the controller view: the pilot view renders far too slowly under CI's software WebGL
+  // for an AI round to get anywhere, as the game advances at most 1 s per frame).
+  for (const [demo, role] of [
+    ['controller', 'controller'],
+    ['pilot', 'pilot'],
+    ['solo_controller', 'controller'],
+  ]) {
     const ctx = await browser.newContext({ viewport: { width: 1280, height: 720 } });
     try {
-      const g = await openGame(ctx, base, `demo=${role}&debug-state=1`, `demo_${role}`);
+      const g = await openGame(ctx, base, `demo=${demo}&debug-state=1`, `demo_${demo}`);
       await waitState(
         g.page,
         (x) => x.phase === 'playing' && x.role === role,
-        `a ${role} demo round`,
+        `a ${demo} demo round`,
       );
+      if (demo === 'solo_controller')
+        await waitState(
+          g.page,
+          (x) => x.dl > 0,
+          'an AI pilot checking in on the text radio',
+          240000,
+        );
+      // A slow runner may still be fading the view in after a fixed pause: first let the
+      // round clock run a few seconds (frames rendered, fade done; debug-state `t`).
+      await waitState(g.page, (x) => x.t >= 4, `the ${demo} view rendering`, 240000);
       await sleep(role === 'pilot' ? 8000 : 5000);
-      await shot(g.page, `web_demo_${role}`);
+      await shot(g.page, `web_demo_${demo}`);
       noErrors(g);
     } finally {
       await ctx.close();

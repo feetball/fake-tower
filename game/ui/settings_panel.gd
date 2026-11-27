@@ -10,6 +10,7 @@ signal leave_requested
 var _volume: HSlider
 var _volume_value: Label
 var _fullscreen: CheckButton
+var _read_aloud: CheckButton
 var _leave: Button
 var _title: Label
 
@@ -55,9 +56,20 @@ func _ready() -> void:
 	_fullscreen.text = "Fullscreen"
 	_fullscreen.toggled.connect(func(on: bool) -> void: UiSettings.apply_fullscreen(on))
 	body.add_child(_fullscreen)
+	_read_aloud = CheckButton.new()
+	_read_aloud.text = "Read text-radio messages aloud"
+	_read_aloud.toggled.connect(func(on: bool) -> void:
+		UiSettings.set_read_aloud(on)
+		if not on:
+			ReadAloud.stop())
+	body.add_child(_read_aloud)
+	if not ReadAloud.available():
+		_read_aloud.disabled = true
+		_read_aloud.tooltip_text = "No text-to-speech on this system."
 	var ptt_help := "Push-to-talk: hold Space, or hold the PTT button in the radio strip."
 	if TouchMode.active():
 		ptt_help = "Push-to-talk: hold the PTT button at the bottom right of the screen."
+	ptt_help += " No microphone? Use the text radio: pilots reply with W / U / S / R, controllers type or click instructions beside the scope."
 	body.add_child(UiKit.label(ptt_help, &"Small", true))
 
 	body.add_child(UiKit.hsep())
@@ -78,6 +90,7 @@ func open(in_game: bool) -> void:
 	_volume_value.text = "%d%%" % int(round(UiSettings.volume() * 100.0))
 	_fullscreen.set_pressed_no_signal(DisplayServer.window_get_mode() == DisplayServer.WINDOW_MODE_FULLSCREEN
 		or UiSettings.fullscreen())
+	_read_aloud.set_pressed_no_signal(UiSettings.read_aloud() and ReadAloud.available())
 	visible = true
 	_volume.grab_focus()
 

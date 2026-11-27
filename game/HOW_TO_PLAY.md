@@ -35,7 +35,9 @@ Everyone knows which two players are controllers. Only the two controllers know 
 
 **How the round ends.** The round ends when no aircraft is still flying. The tower side (real controller and all pilots) wins if **strictly more than half** of the aircraft landed. Otherwise the impostor wins. Exactly half is an impostor win.
 
-**What controllers can and cannot do.** Controllers cannot move anyone's aircraft. They only talk. Pilots fly their own aircraft and decide whom to obey.
+**What controllers can and cannot do.** Controllers cannot move anyone's aircraft. They only talk, by voice or on the text radio (section 3.2). Pilots fly their own aircraft and decide whom to obey.
+
+**No microphone needed.** Everything said on the frequency can also be sent as a text message from buttons and keys: instructions, readbacks, fuel calls, accusations. Voice and text players can share a game.
 
 ---
 
@@ -45,9 +47,9 @@ Everyone knows which two players are controllers. Only the two controllers know 
 | --- | --- |
 | **Host Game** | Opens a game on UDP port **27270** and takes you to the lobby. |
 | **Join Game** | Opens the address form. Type the host's IP address and the port (27270 unless the host changed it), then Connect. In a browser the form is always open and the port defaults to 27271 (WebSocket). |
-| **Solo Practice** | An offline round. You fly one aircraft that starts at an arrival gate, with two computer-flown aircraft and no controllers. Use it to learn the cockpit. |
+| **Solo Practice** | Offline rounds against AI players, which talk on the text radio: **Fly with an AI tower**, **Spot the impostor**, **Be the controller** and **Free flight** (see *Solo practice* below). |
 | **How to Play** | The rules and controls overlay. Esc closes it. |
-| **Settings** | Master volume, fullscreen, leave game, quit. |
+| **Settings** | Master volume, fullscreen, reading the text radio aloud, leave game, quit. |
 | **Quit** | Closes the game. Not shown in a browser or on iPhone/iPad (close the tab or swipe the app away). |
 
 Enter your name first (up to 16 characters). Esc opens Settings at any time, including during a round. **The game does not pause.** On a touchscreen, the **MENU** button (top right) opens Settings instead; see section 10.
@@ -72,7 +74,18 @@ Enter your name first (up to 16 characters). Esc opens Settings at any time, inc
 
 A link can do the joining for you: `index.html?join=wss://tower.example.org&name=Ann` opens the web game, fills in your name and connects. The microphone only works on `https://` pages or `localhost`; the browser asks for permission when you enter the lobby. On a touchscreen, hold the big **PTT** button to talk (section 10).
 
-**Microphone.** The lobby shows whether your mic works and a level meter. With no microphone you can listen but not talk.
+**Microphone.** The lobby shows whether your mic works and a level meter. With no microphone you can listen, and use the text radio for everything you would say (section 3.2).
+
+**Solo practice.** Solo Practice in the main menu opens four offline modes. The AI players speak only on the text radio (they cannot hear voice), so you answer them with the text radio too.
+
+| Mode | You | Who else |
+| --- | --- | --- |
+| **Fly with an AI tower** | A pilot, starting at an arrival gate. | An AI approach controller ("Approach (AI)") and two AI aircraft. The tower calls you first: radar contact, the ATIS letter and QNH, a heading and a safe altitude. It vectors you round a base leg to a 30° intercept, clears you for the ILS at an altitude that keeps you above the MSA and below the glideslope, and clears you to land at about 7 nm. It repeats instructions you ignore, notices a wrong altimeter setting (you level off a few hundred feet away from your altitude) and warns you below the MSA. |
+| **Spot the impostor** | A pilot. | Two AI controllers, **Controller A** and **Controller B**, both "Fallow Approach", and one AI aircraft. One controller is the impostor and it is after you. It starts with plausible vectors, then lies: a wrong QNH, a descent below the MSA, a heading into a hill, a 360 and vectors away to burn your fuel. The real one corrects lies at once ("disregard…") and calls the impostor out; the impostor calls the real one out too. Check every instruction against the ATIS and the plate (section 6). The tower side wins only if both aircraft land. |
+| **Be the controller** | The real tower, at the scope. | Four AI aircraft at the arrival gates. They check in, fly exactly what you send them by text, read back WILCO, refuse unsafe instructions with UNABLE and a reason, ask for vectors when you forget them, and declare minimum fuel. |
+| **Free flight** | A pilot. | Two AI aircraft and no controller. Learn the cockpit. |
+
+Once your own aircraft has landed and stopped (or crashed), a solo round plays out the rest eight times faster: the clock shows ▶▶.
 
 **Lobby and end screen.** Both are open mic: everyone hears everyone, clean, with no radio effect.
 
@@ -80,7 +93,9 @@ A link can do the joining for you: `index.html?join=wss://tower.example.org&name
 
 ## 3. The radio
 
-There is one frequency, **APP 119.850**, shown in the strip across the top of the screen. During a round, it is the only way anyone talks to anyone.
+There is one frequency, **APP 119.850**, shown in the strip across the top of the screen. During a round, it is the only way anyone talks to anyone: by voice (3.1) or by text (3.2). Both share the one frequency.
+
+### 3.1 Voice
 
 | What | How |
 | --- | --- |
@@ -96,6 +111,51 @@ The strip shows IDLE, RX plus who is talking (a pilot's callsign, or a controlle
 Space does not transmit while you are typing in a text field. In a round that is only the controller scratchpad. Press Enter or click the scope to leave the field.
 
 Wait for the frequency to be clear before you key. If you talk over someone, you block both of you.
+
+### 3.2 The text radio (no microphone needed)
+
+Every standard call can be sent as a text message instead: instructions, readbacks, fuel calls, accusations. You build it from buttons or keys, never free typing, and the game writes it out in standard phraseology, the same for everyone. Every player sees every message, as on a real frequency: pilots in the **DATALINK** panel at the top right of the cockpit view, controllers in the **FREQUENCY** tab of the flight data panel. Messages to your own callsign are marked in amber.
+
+Text obeys the frequency too:
+
+| What | How |
+| --- | --- |
+| Going out | A message waits until the frequency is clear (nobody holding push-to-talk, no other text going out), then is "on the air" for about as long as it takes to say it, 1.5 to 6 seconds. The strip shows **RX** name **· TEXT**, or **TX TEXT** for your own. Your microphone never opens for text. |
+| Blocked | If anyone keys a microphone while a text message is on the air, it is **BLOCKED**: nobody gets it. Its sender sees it in red with a **RESEND** button. |
+| Waiting too long | A message that cannot get out within 30 seconds is dropped (**NOT SENT**). You can have at most 3 waiting or going out. |
+| Taking turns | When several people have text waiting, whoever spoke least recently goes first. |
+
+**Pilots** (DATALINK panel, keys work while flying):
+
+| Key | Does |
+| --- | --- |
+| **W** | WILCO (will comply) to the newest instruction for you |
+| **U** | UNABLE. **WHY ▾** gives a reason: below the MSA, the QNH is not the ATIS one, terrain, fuel |
+| **S** | STANDBY |
+| **R** | SAY AGAIN |
+| **C** | CALLS: check in, request vectors, established, minimum fuel, mayday fuel (with your real fuel), going around, and **CALL OUT** a controller as the impostor |
+| **T** | More or fewer lines |
+
+The reply buttons only show while an instruction for you is waiting for an answer. That instruction stays pinned in the panel until you answer it. Replying does not fly the aircraft: you still set the autopilot yourself. After a crash you can no longer send, but the panel keeps showing the frequency.
+
+**Controllers** (flight data panel, under the flight strip): select a target, then either
+
+- click the **HDG / ALT / SPD / QNH** values (the wheel or − / + changes them, Shift for big steps; a value is included once you touch it, and the turn direction comes from the radar track) and the chips (RADAR CONTACT, EXPECT ILS, CLEARED ILS, CLEARED LAND, GO AROUND, CANCEL APP, 360 LEFT / RIGHT, LOW ALT ALERT, TRAFFIC ALERT, DISREGARD, ROGER), or
+- press **Enter** and type shorthand, then Enter again to send (Esc leaves the line):
+
+| Type | Means |
+| --- | --- |
+| `h270` · `l270` · `r270` | fly heading 270 · turn left · turn right heading 270 |
+| `a55` or `a5500` (also `c55`, `d55`) | climb / descend and maintain 5500 (the verb comes from the radar altitude) |
+| `s180` | speed 180 knots |
+| `q1009` · `q` | QNH 1009 · the ATIS QNH |
+| `app` (`ils`) · `land` (`ctl`) · `ga` · `x` | cleared ILS approach · cleared to land · go around · cancel approach clearance |
+| `rc` · `exp` | radar contact, information … is current · expect ILS approach |
+| `la` · `ta` · `ol` / `or` · `dis` · `rog` | low altitude alert · traffic alert · left / right 360 for spacing · disregard · roger |
+
+The line under it shows exactly what will go out; a QNH that is not the ATIS one shows in amber. Items that cannot go together (a heading with a 360, CLEARED ILS with GO AROUND…) grey out SEND and say why. **SEND** sends it; while three of your messages are still waiting it keeps what you composed and says the frequency is busy. A blocked or unsent message of yours gets **RESEND** in the FREQUENCY tab. Below, **ALL STATIONS**: broadcast the ATIS letter and QNH, or **CALL OUT** the other controller. With `ALT` and `CLEARED ILS` together the message reads "maintain 5500 until established on the localizer, cleared ILS approach".
+
+**Read aloud.** With **Read text-radio messages aloud** on in Settings (on by default where the system has text-to-speech), every message from someone else is spoken by the system's voices, one voice per person, so the two controllers sound different. Your own messages are not read back. These voices do not go through the radio filter.
 
 ---
 
@@ -136,6 +196,9 @@ A reminder of the keys appears bottom left at the start and after each view chan
 | **I** | Open or close the ATIS |
 | **P** | Open or close the approach plate |
 | **1 / 2 / 3** | Panel / outside / pedestal view |
+| **W / U / S / R** | Text radio: WILCO / UNABLE / STANDBY / SAY AGAIN to the newest instruction for you (section 3.2) |
+| **C** | Text radio: open the CALLS row |
+| **T** | Text radio: more or fewer lines |
 | **Esc** | Settings menu (this does not close the ATIS or plate) |
 
 Holding a heading, altitude, speed or altimeter key repeats. Gear, flaps, A and B do not repeat.
@@ -426,8 +489,10 @@ Two things worth knowing:
 | --- | --- |
 | Header | ATIS letter and QNH. "ON FREQ 119.850 CTL" with the two controller names (you are marked). |
 | **Flight strip** | For the selected target: callsign, the pilot's name, the CA / LA / LANDED / CRASHED tag, and **ALT** (feet, with arrow or = for level), **GS** (kt), **TRK** (degrees), **DME** (nm from the threshold), **MSA** (for its sector, within 25 nm). Below it a **scratchpad**. |
+| **Datalink clearance** | The text-radio composer for the selected target, and the ALL STATIONS calls (section 3.2). |
 | **Traffic** | One line per aircraft: callsign, altitude in hundreds with arrow, ground speed in tens, DME, CA/LA flag. Click a line to select. |
-| **Events** | The last 7: landings, crashes, collisions, fuel. |
+| **Events** | The last 5: landings, crashes, collisions, fuel. |
+| Tabs: **FREQUENCY** | The text radio as everyone sees it, newest last (shown first). An UNABLE shows in amber, a blocked or unsent message in red. |
 | Tabs: **ATIS** | The ATIS text. |
 | Tabs: **ILS RWY 27** | Course 270, platform 3000, FAF FALOW 7.7 nm, glideslope 3.0, DA 712, MSA by sector, the hold, the missed approach. |
 | Tabs: **PHRASEOLOGY** | Example calls with the selected callsign and the current QNH and information letter filled in. Click the tab again to close it. |
@@ -470,6 +535,8 @@ You are the real controller. Your jobs, in order:
 
 Pilots may say "minimum fuel", "MAYDAY MAYDAY MAYDAY, SKW412, fuel, 3 minutes remaining" or "Unable, SKW412, that is below the MSA."
 
+On the text radio the composer builds the same calls (section 3.2). An AI pilot (Be the controller) flies only what you send it in text.
+
 ---
 
 ## 6. Spotting the impostor (pilots)
@@ -489,7 +556,8 @@ You cannot see the other controller's screen. You can only judge what you are to
 
 Rules of thumb:
 
-- If an instruction **fails a check**, say "unable" and why, on the radio. The real controller can then back you up.
+- If an instruction **fails a check**, say "unable" and why, on the radio. The real controller can then back you up. On the text radio: **U**, or **WHY ▾** for the reason.
+- If you are sure, **CALL OUT** the impostor (text radio CALLS, **C**) so the other pilots hear it.
 - The impostor can sound perfect. Do not trust a voice because it is calm.
 - The other controller **may also be an honest mistake**. Ask for it to be repeated before you accuse anyone.
 - Your safest default is to fly the published procedure yourself: ATIS QNH, stay at or above the MSA, intercept, platform 3000, glideslope. You do not need the controller to land. You do need them to keep you away from other aircraft you cannot see.
@@ -509,7 +577,7 @@ You see the same scope as the real controller. The top strip says IMPOSTOR. You 
 | 5 | 3 |
 | 6 | 3 |
 
-You have only your voice. You cannot touch anyone's aircraft. The pilots fly themselves, and they can check you. Your tools are errors that sound plausible.
+You have only your voice, or the same text radio as everyone. You cannot touch anyone's aircraft. The pilots fly themselves, and they can check you. Your tools are errors that sound plausible.
 
 What works, and what the sim does about it:
 
@@ -519,7 +587,7 @@ What works, and what the sim does about it:
 - **Two aircraft on the approach together.** Clear a second aircraft while the first is still on final, or send two to the same altitude on converging headings. CA will warn the real tower.
 - **Holds.** Fuel is the only thing that ends a hold. Pilots see their own fuel and you do not. Holding everyone for a long time takes fuel from them, and you cannot see how much.
 - **Sound like the tower.** Use the real phraseology (see 5.9). Flag a pilot's mistakes before they flag yours.
-- **Talk over the real controller.** Two people keying blocks the frequency. This also silences you. Use it when a timely warning would hurt you.
+- **Talk over the real controller.** Two people keying blocks the frequency. This also silences you. Use it when a timely warning would hurt you. Holding push-to-talk also blocks a text message on the air, and text waits while you hold it.
 
 Watch the **CA** and **LA** alerts: they mean the real controller is about to speak up.
 
@@ -610,7 +678,7 @@ You can use two hands at once: holding **PTT** with one thumb does not stop the 
 | Touch | What it does |
 | --- | --- |
 | Hold **PTT** (bottom right, during a round) | Push-to-talk. Release to stop. It shows TX, RECEIVING, BLOCKED or RADIO DEAD. |
-| **MENU** (top right; in the top strip during a round) | Settings: volume, fullscreen, leave game, quit. Same as Esc. |
+| **MENU** (top right; in the top strip during a round) | Settings: volume, fullscreen, reading the text radio aloud, leave game, quit. Same as Esc. |
 | Tap a text field | Opens the on-screen keyboard. The screen slides up so the field stays visible. |
 
 **Pilot**
@@ -635,6 +703,8 @@ You can use two hands at once: holding **PTT** with one thumb does not stop the 
 
 A value shown in amber in the strip has been sent and is waiting for the aircraft to confirm it.
 
+The **DATALINK** panel (top right, between the columns) is the text radio (section 3.2): tap **WILCO**, **UNABLE** (**WHY ▾** for a reason), **STANDBY** or **SAY AGAIN** to answer the instruction marked in amber, **CALLS** for check-in, fuel calls and calling out a controller, **MORE** for more lines.
+
 **Controller**
 
 | Touch | What it does |
@@ -651,4 +721,4 @@ A value shown in amber in the strip has been sent and is waiting for the aircraf
 | With a target selected: **LDR −45°** / **+45°**, **AUTO** | Turn its data block, or back to automatic |
 | **DESEL** | Deselect and clear the measuring line |
 
-The flight data panel (tabs, traffic list, scratchpad) works with a tap, but only while no other finger is down: let go of PTT first. The scratchpad opens the on-screen keyboard. The same goes for the menus and the tablet's own tab buttons.
+The flight data panel (tabs, traffic list, scratchpad, and the text-radio composer: HDG / ALT / SPD / QNH with − / +, the instruction chips, SEND) works with a tap, but only while no other finger is down: let go of PTT first. The scratchpad and the shorthand line open the on-screen keyboard. The same goes for the menus and the tablet's own tab buttons.

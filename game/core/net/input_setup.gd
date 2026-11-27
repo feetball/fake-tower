@@ -21,6 +21,13 @@ const ACTIONS := {
 	"flaps_up": [KEY_F, true],
 	"show_atis": [KEY_I, false],
 	"show_plate": [KEY_P, false],
+	# Text radio, pilot: reply to the newest clearance for us, the calls row, more lines.
+	"dl_wilco": [KEY_W, false],
+	"dl_unable": [KEY_U, false],
+	"dl_standby": [KEY_S, false],
+	"dl_say_again": [KEY_R, false],
+	"dl_calls": [KEY_C, false],
+	"dl_more": [KEY_T, false],
 }
 
 

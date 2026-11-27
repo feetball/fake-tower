@@ -11,8 +11,16 @@ signal how_to_play_requested
 const NAME_MAX := 16
 const WEB_DEFAULT_PORT := 27271 ## Session.DEFAULT_WS_PORT
 
+const SOLO_MODES: Array[Array] = [
+	["solo", "Fly with an AI tower", "An AI approach controller talks you down by text, with two AI aircraft on frequency."],
+	["solo_impostor", "Spot the impostor", "Two AI controllers both claim to be the tower. One wants you dead. Check every instruction."],
+	["solo_controller", "Be the controller", "You run the radar. Four AI pilots fly what you send them by text."],
+	["pilot_far", "Free flight", "Fly the ILS 27 on your own, no controller on frequency."],
+]
+
 var _name: LineEdit
 var _join_form: VBoxContainer
+var _solo_form: VBoxContainer
 var _address: LineEdit
 var _port: LineEdit
 var _status: Label
@@ -71,7 +79,9 @@ func _ready() -> void:
 	menu.add_child(_join_form)
 	if _web:
 		_join_form.visible = true
-	_add_item(menu, "Solo Practice", _on_solo)
+	_add_item(menu, "Solo Practice", _toggle_solo)
+	_solo_form = _build_solo_form()
+	menu.add_child(_solo_form)
 	_add_item(menu, "How to Play", func() -> void: how_to_play_requested.emit())
 	_add_item(menu, "Settings", func() -> void: settings_requested.emit())
 	# A browser tab cannot be quit, and iOS apps must not quit themselves.
@@ -221,12 +231,45 @@ func _default_join_port() -> int:
 	return WEB_DEFAULT_PORT if _web else Sess.default_port()
 
 
-func _on_solo() -> void:
+func _toggle_solo() -> void:
+	_solo_form.visible = not _solo_form.visible
+	if _solo_form.visible:
+		(_solo_form.find_child("SoloMode0", true, false) as Button).grab_focus()
+
+
+## The solo modes (core/net/demo.gd): AI players on the text radio, or a free flight.
+func _build_solo_form() -> VBoxContainer:
+	var list := UiKit.vbox(6)
+	for i in SOLO_MODES.size():
+		var spec: Array = SOLO_MODES[i]
+		var role := String(spec[0])
+		var b := UiKit.button(String(spec[1]), &"", func() -> void: _on_solo(role))
+		b.name = "SoloMode%d" % i
+		b.alignment = HORIZONTAL_ALIGNMENT_LEFT
+		b.custom_minimum_size = Vector2(250.0, 0.0)
+		var note := UiKit.label(String(spec[2]), &"Small", true)
+		note.custom_minimum_size = Vector2(300.0, 0.0)
+		note.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		list.add_child(UiKit.hbox(14, [b, note]))
+	var hint := UiKit.label("No microphone needed: the AI players use the text radio, and so can you.", &"Small", true)
+	hint.custom_minimum_size = Vector2(520.0, 0.0)
+	list.add_child(hint)
+	var margin := MarginContainer.new()
+	margin.add_theme_constant_override(&"margin_left", 24)
+	margin.add_theme_constant_override(&"margin_top", 6)
+	margin.add_theme_constant_override(&"margin_bottom", 14)
+	margin.add_child(list)
+	var wrap := UiKit.vbox(0, [margin])
+	wrap.visible = false
+	return wrap
+
+
+func _on_solo(role: String) -> void:
 	var n := _name.text.strip_edges()
 	if n != "":
 		UiSettings.set_value("name", n)
 	show_message("Starting solo practice…", false)
-	Sess.invoke(&"start_demo", ["pilot_far"])
+	Sess.invoke(&"start_demo", [role])
 
 
 func _on_session_error(msg: String) -> void:

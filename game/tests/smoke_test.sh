@@ -2,6 +2,8 @@
 # Smoke test: launch the real main scene headless for a bounded number of frames in each
 # mode and fail on script errors / load errors (tools/ci_check_log.sh) or a bad exit code.
 # Usage: game/tests/smoke_test.sh [mode...]   modes: menu pilot pilot_far controller
+#        solo solo_impostor solo_controller (text-radio rounds with AI players: run 3x the
+#        frames so the first AI transmissions reach the views)
 #        env GODOT overrides the binary, FRAMES the frame budget (default 240),
 #        TIMEOUT the wall-clock limit per mode in seconds (default 120),
 #        SMOKE_ALLOW_MISSING_VIEW=1 to not fail when a view scene file is absent.
@@ -13,19 +15,22 @@ FRAMES="${FRAMES:-240}"
 TIMEOUT="${TIMEOUT:-120}"
 LOGS="$(mktemp -d)"
 MODES=("$@")
-[ ${#MODES[@]} -gt 0 ] || MODES=(menu pilot pilot_far controller)
+[ ${#MODES[@]} -gt 0 ] || MODES=(menu pilot pilot_far controller solo solo_impostor solo_controller)
 
 fail=0
 for mode in "${MODES[@]}"; do
+  frames="$FRAMES"
   case "$mode" in
     menu) args=(); view="" ;;
     pilot | pilot_far) args=(-- "--demo=$mode"); view="scenes/pilot/pilot_view.tscn" ;;
     controller) args=(-- "--demo=$mode"); view="scenes/controller/controller_view.tscn" ;;
+    solo | solo_impostor) args=(-- "--demo=$mode"); view="scenes/pilot/pilot_view.tscn"; frames=$((FRAMES * 3)) ;;
+    solo_controller) args=(-- "--demo=$mode"); view="scenes/controller/controller_view.tscn"; frames=$((FRAMES * 3)) ;;
     *) echo "unknown mode: $mode" >&2; exit 2 ;;
   esac
   log="$LOGS/$mode.log"
   start=$SECONDS
-  timeout "$TIMEOUT" "$GODOT" --headless --path "$DIR" --quit-after "$FRAMES" "${args[@]}" >"$log" 2>&1
+  timeout "$TIMEOUT" "$GODOT" --headless --path "$DIR" --quit-after "$frames" "${args[@]}" >"$log" 2>&1
   rc=$?
   reason=""
   # main.gd silently falls back to a placeholder when a view scene is missing, so a
@@ -39,7 +44,7 @@ for mode in "${MODES[@]}"; do
     reason="${reason:+$reason; }script/load errors in log"
   fi
   if [ -z "$reason" ]; then
-    echo "PASS smoke[$mode] ($((SECONDS - start))s, $FRAMES frames)"
+    echo "PASS smoke[$mode] ($((SECONDS - start))s, $frames frames)"
   else
     echo "FAIL smoke[$mode]: $reason"
     sed 's/^/    /' "$LOGS/$mode.check"

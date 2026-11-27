@@ -57,8 +57,9 @@ Useful launch arguments (after `--`): `--demo=pilot`, `--demo=pilot_far`, `--dem
 - **Host**: main menu > Host Game. Others join with your IP address. The default port is **27270 (UDP)**; allow it through your firewall, and forward it on your router when playing over the internet (direct IP only for now).
 - **Join**: main menu > Join Game, enter the host's IP (and port if changed).
 - **Start**: the host starts the round from the lobby once at least 4 players are connected. Roles are random; the real controller and the impostor both see the radar, pilots never receive the impostor flag.
-- **Solo practice**: main menu > Solo Practice, an offline round.
+- **Solo practice**: main menu > Solo Practice: fly with an AI tower, spot the impostor (two AI controllers, one lying), be the controller of four AI pilots, or a free flight. The AI players speak on the text radio.
 - **Radio**: hold `Space` to talk. One transmitter is heard through a radio filter; two at once block the frequency.
+- **Text radio (no microphone needed)**: everything can also be sent as standard text messages on the same frequency. Pilots answer the newest instruction with `W` wilco / `U` unable / `S` standby / `R` say again and open calls with `C`; controllers build clearances under the flight strip or press `Enter` and type shorthand (`l240 a55 s180 app`). Messages wait for a clear frequency and are blocked by anyone keying up while they air. Settings can read them aloud with the system's text-to-speech.
 - **Full guide**: [game/HOW_TO_PLAY.md](game/HOW_TO_PLAY.md) is the player manual for the Godot game: radio, pilot and controller controls, flying the ILS 27, spotting (or playing) the impostor. Builds ship it as `HOW_TO_PLAY.md` next to the executable.
 - **Controls**: pilots use the keyboard autopilot panel (`Left`/`Right` heading, `Up`/`Down` altitude, `PageUp`/`PageDown` speed, `[`/`]` altimeter, `A` approach mode, `G` gear, `F`/`Shift+F` flaps, `I` ATIS, `P` plate); controllers use the mouse on the scope. The full key list is in [game/ARCHITECTURE.md](game/ARCHITECTURE.md#input-actions-registered-in-code-by-session-at-startup) and the in-game How to Play screen.
 
@@ -68,10 +69,10 @@ All commands run from the repo root; set `GODOT` if `godot` is not on your PATH 
 
 ```
 godot --headless --path game --import                       # import cache (needed once)
-godot --headless --path game -s res://tests/run_tests.gd    # simulation, server, regression, parity, demo tests
+godot --headless --path game -s res://tests/run_tests.gd    # simulation, server, regression, parity, demo, text radio and AI tests
 godot --headless --path game -s res://tests/voice_test.gd   # voice codec, jitter buffer, radio DSP
-game/tests/net_test.sh                                      # 1 host + 3 clients on localhost
-game/tests/smoke_test.sh                                    # real main scene headless: menu, pilot, pilot_far, controller
+game/tests/net_test.sh                                      # 1 host + 3 clients on localhost (also a text-radio clearance and readback)
+game/tests/smoke_test.sh                                    # real main scene headless: menu, pilot, pilot_far, controller, solo modes
 game/tools/ci_check_log.sh <log>                            # fail on SCRIPT ERROR / Parse Error / failed loads
 pip install gdtoolkit==4.5.0 && gdlint game                 # config: game/gdlintrc
 game/tests/ws_net_test.sh                                   # dedicated server + WebSocket/ENet clients, full rounds
@@ -87,12 +88,12 @@ game/tools/export_build.sh web && node game/tests/web/web_test.mjs   # browser t
 | Game - import and script check | `godot --headless --import`, fails on script errors, parse errors and failed loads |
 | Game - unit and voice tests | `run_tests.gd` and `voice_test.gd` |
 | Game - network test | `net_test.sh`, 4 headless instances over localhost |
-| Game - smoke test | main scene headless for 240 frames in menu, `--demo=pilot`, `--demo=pilot_far`, `--demo=controller`; fails if a view scene is missing |
+| Game - smoke test | main scene headless for 240 frames in menu, `--demo=pilot`, `--demo=pilot_far`, `--demo=controller`, and 720 frames in `--demo=solo`, `--demo=solo_impostor`, `--demo=solo_controller` (AI players on the text radio); fails if a view scene is missing |
 | Game - GDScript lint | `gdlint` (formatting is reported by `gdformat --check` but not enforced yet) |
 | Game - export | Windows and Linux release exports with the pinned official templates; artifacts `fake-tower-windows`, `fake-tower-linux` |
 | Game - WebSocket / dedicated server test | `ws_net_test.sh`: a headless dedicated server and WebSocket (and one ENet) clients play full rounds |
 | Game - touch UI simulation | `touch_sim.tscn` pilot and controller: real touch events drive the touch UI (also checks the menu fits a 1080-high touch layout) |
-| Game - web export and browser test | web export (fails on files over 95 MB), then `game/tests/web/web_test.mjs` in headless Chromium: menu without console errors, both demos, phone emulation with PTT held while tapping the autopilot strip, two browsers joining a headless dedicated server over WebSocket; artifacts `fake-tower-web`, `web-test-output` |
+| Game - web export and browser test | web export (fails on files over 95 MB), then `game/tests/web/web_test.mjs` in headless Chromium: menu without console errors, the pilot, controller and solo controller (AI pilots on the text radio) demos, phone emulation with PTT held while tapping the autopilot strip, two browsers joining a headless dedicated server over WebSocket; artifacts `fake-tower-web`, `web-test-output` |
 | Game - macOS export / macOS run | export on Linux (artifact `fake-tower-macos`), then on `macos-latest`: the exported app headless (menu, pilot, controller), once in a real window with a screenshot (allowed to fail: runner GPUs), and the unit tests from source |
 | Game - Android debug APK | runner Android SDK + JDK 17, generated debug keystore, export, `aapt`/`apksigner` checks; artifact `fake-tower-android` |
 | Game - iOS Xcode project / simulator build | export the Xcode project on Linux (dummy team id), then `xcodebuild -sdk iphonesimulator` unsigned on `macos-latest`; artifact `fake-tower-ios-xcode` |
@@ -103,6 +104,7 @@ Godot 4.5.1 and the export templates are downloaded from the official `godot-bui
 
 - No Steam integration yet. Planned: GodotSteam lobbies and Steam networking replacing direct IP.
 - Voice is untested with real microphones across real networks (only logic and codec tests run headless).
+- The AI players work by text only: they cannot hear voice, so in a solo round you talk to them on the text radio. The AI controllers vector by a fixed pattern (base leg, gate, 30° intercept) and are not a substitute for a good human controller. Read-aloud uses the system's voices without the radio filter, and has not been tried on every platform.
 - Single airport (one runway, one ILS approach).
 - The cockpit is procedural: no CC0 cockpit model exists, so panels and instruments are built in code.
 - Rendering has only been verified under software Vulkan so far (no GPU hardware test), so performance and visuals on real GPUs are unconfirmed.

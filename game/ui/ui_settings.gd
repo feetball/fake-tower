@@ -1,7 +1,7 @@
 class_name UiSettings
 extends RefCounted
 ## Persistent per-user shell settings (user://settings.cfg): player name, last
-## join address/port, master volume, fullscreen.
+## join address/port, master volume, fullscreen, reading the text radio aloud.
 
 const PATH := "user://settings.cfg"
 const SECTION := "shell"
@@ -53,6 +53,15 @@ static func apply_fullscreen(on: bool, persist: bool = true) -> void:
 			DisplayServer.window_set_mode(mode)
 	if persist:
 		set_value("fullscreen", on)
+
+
+## Read text-radio messages aloud (ui/read_aloud.gd). On unless turned off.
+static func read_aloud() -> bool:
+	return get_value("read_aloud", true)
+
+
+static func set_read_aloud(on: bool) -> void:
+	set_value("read_aloud", on)
 
 
 static func apply_all() -> void:
